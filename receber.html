@@ -1,0 +1,634 @@
+
+<!doctype html>
+<html lang="pt-BR">
+
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+
+    <title>SISTEMA ZER01 — Contas a Receber</title>
+
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+
+    <link
+        href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap"
+        rel="stylesheet">
+
+    <link rel="stylesheet" href="css/global.css">
+    <link rel="stylesheet" href="css/receber.css">
+</head>
+
+<body data-page="receber">
+
+    <div id="app-shell"></div>
+
+    <main id="page-content" class="page-content">
+
+        <!-- =====================================================
+             SIDEBAR
+        ====================================================== -->
+
+        <aside class="sidebar" id="sidebar">
+
+            <div class="brand">
+
+                <img src="logo.png" alt="ZER01">
+
+                <div>
+                    <strong>ZER<span>01</span></strong>
+                    <small>CONTROLE COMERCIAL</small>
+                </div>
+
+            </div>
+
+            <nav class="nav-primary">
+
+                <a class="nav-link" href="dashboard.html">
+                    <span class="nav-icon">▦</span>
+                    <span>Dashboard</span>
+                </a>
+
+                <a class="nav-link" href="clientes.html">
+                    <span class="nav-icon">♙</span>
+                    <span>Clientes</span>
+                </a>
+
+                <a class="nav-link" href="vendas.html">
+                    <span class="nav-icon">＋</span>
+                    <span>Nova venda</span>
+                </a>
+
+                <a class="nav-link" href="vendas-list.html">
+                    <span class="nav-icon">⌁</span>
+                    <span>Vendas</span>
+                </a>
+
+                <a class="nav-link active" href="receber.html">
+                    <span class="nav-icon">◷</span>
+                    <span>Contas a receber</span>
+                </a>
+
+                <a class="nav-link" href="pagamentos.html">
+                    <span class="nav-icon">↗</span>
+                    <span>Pagamentos</span>
+                </a>
+
+                <a class="nav-link" href="relatorios.html">
+                    <span class="nav-icon">▤</span>
+                    <span>Relatórios</span>
+                </a>
+
+                <a class="nav-link" href="configuracoes.html">
+                    <span class="nav-icon">⚙</span>
+                    <span>Configurações</span>
+                </a>
+
+            </nav>
+
+            <div class="sidebar-bottom">
+
+                <a class="nav-link" href="configuracoes.html">
+                    <span class="nav-icon">?</span>
+                    <span>Central de ajuda</span>
+                </a>
+
+                <button
+                    class="nav-link logout"
+                    id="logout-button">
+
+                    <span class="nav-icon">↪</span>
+                    <span>Sair</span>
+
+                </button>
+
+            </div>
+
+        </aside>
+
+        <!-- =====================================================
+             MOBILE
+        ====================================================== -->
+
+        <button
+            class="mobile-menu"
+            id="mobile-menu"
+            aria-label="Abrir menu">
+
+            ☰
+
+        </button>
+
+        <!-- =====================================================
+             TOPBAR
+        ====================================================== -->
+
+        <header class="topbar">
+
+            <div>
+
+                <span class="eyebrow">
+                    SISTEMA ZER01 / OPERAÇÃO
+                </span>
+
+                <h1>
+                    Contas a receber
+                </h1>
+
+            </div>
+
+            <div class="topbar-actions">
+
+                <span class="live-dot"></span>
+
+                <span id="current-user">
+                    Sessão ativa
+                </span>
+
+                <a
+                    class="avatar"
+                    href="configuracoes.html">
+
+                    Z1
+
+                </a>
+
+            </div>
+
+        </header>
+
+        <!-- =====================================================
+             CABEÇALHO
+        ====================================================== -->
+
+        <section class="page-header">
+
+            <div>
+
+                <h2>
+                    Contas a receber
+                </h2>
+
+                <p>
+                    Acompanhe quanto já entrou, quanto falta receber
+                    e quanto está previsto para entrar em cada dia.
+                </p>
+
+            </div>
+
+        </section>
+
+        <!-- =====================================================
+             CARDS FINANCEIROS
+        ====================================================== -->
+
+        <section
+            class="grid grid-4"
+            style="margin-bottom:20px;">
+
+            <!-- TOTAL GERAL -->
+
+            <div class="panel metric">
+
+                <label id="receivable-general-label">
+                    TOTAL GERAL
+                </label>
+
+                <strong
+                    id="receivable-general"
+                    style="font-size:26px;">
+
+                    R$ 0,00
+
+                </strong>
+
+                <small
+                    id="receivable-general-description"
+                    style="
+                        display:block;
+                        margin-top:6px;
+                        color:var(--muted);
+                    ">
+
+                    Valor original das parcelas
+
+                </small>
+
+            </div>
+
+            <!-- TOTAL RECEBIDO -->
+
+            <div class="panel metric">
+
+                <label>
+                    TOTAL RECEBIDO
+                </label>
+
+                <strong
+                    id="receivable-received"
+                    style="font-size:26px;">
+
+                    R$ 0,00
+
+                </strong>
+
+                <small
+                    id="receivable-received-description"
+                    style="
+                        display:block;
+                        margin-top:6px;
+                        color:var(--muted);
+                    ">
+
+                    Valores já pagos
+
+                </small>
+
+            </div>
+
+            <!-- TOTAL A RECEBER -->
+
+            <div class="panel metric">
+
+                <label id="receivable-total-label">
+                    TOTAL A RECEBER
+                </label>
+
+                <strong
+                    id="receivable-total"
+                    style="font-size:26px;">
+
+                    R$ 0,00
+
+                </strong>
+
+                <small
+                    id="receivable-total-description"
+                    style="
+                        display:block;
+                        margin-top:6px;
+                        color:var(--muted);
+                    ">
+
+                    Saldo ainda em aberto
+
+                </small>
+
+            </div>
+
+            <!-- ATRASADAS -->
+
+            <div class="panel metric">
+
+                <label>
+                    ATRASADAS
+                </label>
+
+                <strong
+                    id="receivable-overdue"
+                    style="font-size:26px;">
+
+                    R$ 0,00
+
+                </strong>
+
+                <small
+                    id="receivable-overdue-description"
+                    style="
+                        display:block;
+                        margin-top:6px;
+                        color:var(--muted);
+                    ">
+
+                    Saldo vencido
+
+                </small>
+
+            </div>
+
+        </section>
+
+        <!-- =====================================================
+             FILTROS
+        ====================================================== -->
+
+        <div class="toolbar">
+
+            <!-- CLIENTE -->
+
+            <label
+                class="field"
+                style="min-width:240px;">
+
+                <span>
+                    Cliente
+                </span>
+
+                <select id="receivable-client">
+
+                    <option value="">
+                        Todos os clientes
+                    </option>
+
+                </select>
+
+            </label>
+
+            <!-- MÊS -->
+
+            <label
+                class="field"
+                style="min-width:180px;">
+
+                <span>
+                    Mês
+                </span>
+
+                <input
+                    id="receivable-month"
+                    type="month">
+
+            </label>
+
+            <!-- HOJE -->
+
+            <button
+                class="btn filter active"
+                data-filter="todos"
+                type="button">
+
+                Todas
+
+            </button>
+
+            <button
+                class="btn filter"
+                data-filter="hoje"
+                type="button">
+
+                Hoje
+
+            </button>
+
+            <button
+                class="btn filter"
+                data-filter="amanha"
+                type="button">
+
+                Amanhã
+
+            </button>
+
+            <button
+                class="btn filter"
+                data-filter="7dias"
+                type="button">
+
+                Próximos 7 dias
+
+            </button>
+
+            <button
+                class="btn filter"
+                data-filter="atrasadas"
+                type="button">
+
+                Atrasadas
+
+            </button>
+
+            <button
+                class="btn filter"
+                data-filter="pagas"
+                type="button">
+
+                Pagas
+
+            </button>
+
+            <button
+                class="btn"
+                id="clear-receivable-filters"
+                type="button">
+
+                Limpar filtros
+
+            </button>
+
+        </div>
+
+        <!-- =====================================================
+             PREVISÃO DE RECEBIMENTOS
+        ====================================================== -->
+
+        <section
+            class="panel"
+            style="margin-bottom:20px;">
+
+            <div
+                style="
+                    display:flex;
+                    justify-content:space-between;
+                    align-items:flex-start;
+                    gap:20px;
+                    flex-wrap:wrap;
+                    margin-bottom:20px;
+                ">
+
+                <div>
+
+                    <span class="eyebrow">
+                        PLANEJAMENTO FINANCEIRO
+                    </span>
+
+                    <h3
+                        id="forecast-title"
+                        style="margin-top:5px;">
+
+                        Previsão de recebimentos
+
+                    </h3>
+
+                    <p
+                        id="forecast-description"
+                        style="
+                            margin:5px 0 0;
+                            color:var(--muted);
+                        ">
+
+                        Quanto está previsto para entrar em cada dia.
+
+                    </p>
+
+                </div>
+
+                <div
+                    style="
+                        text-align:right;
+                    ">
+
+                    <small
+                        style="
+                            display:block;
+                            color:var(--muted);
+                            font-size:11px;
+                            letter-spacing:.08em;
+                        ">
+
+                        TOTAL PREVISTO
+
+                    </small>
+
+                    <strong
+                        id="forecast-total"
+                        style="
+                            display:block;
+                            font-size:24px;
+                            margin-top:4px;
+                        ">
+
+                        R$ 0,00
+
+                    </strong>
+
+                </div>
+
+            </div>
+
+            <!-- RESUMO DIÁRIO -->
+
+            <div
+                id="forecast-list"
+                style="
+                    display:flex;
+                    flex-direction:column;
+                    gap:8px;
+                ">
+
+                <div
+                    class="empty"
+                    style="padding:20px;">
+
+                    Carregando previsão...
+
+                </div>
+
+            </div>
+
+        </section>
+
+        <!-- =====================================================
+             TABELA DE CONTAS
+        ====================================================== -->
+
+        <section class="panel">
+
+            <div class="table-wrap">
+
+                <table class="data-table">
+
+                    <thead>
+
+                        <tr>
+
+                            <th>
+                                Cliente
+                            </th>
+
+                            <th>
+                                Venda
+                            </th>
+
+                            <th>
+                                Parcela
+                            </th>
+
+                            <th>
+                                Valor
+                            </th>
+
+                            <th>
+                                Vencimento
+                            </th>
+
+                            <th>
+                                Status
+                            </th>
+
+                            <th>
+                                Ação
+                            </th>
+
+                        </tr>
+
+                    </thead>
+
+                    <tbody id="receivables-table">
+
+                        <tr>
+
+                            <td
+                                colspan="7"
+                                class="empty">
+
+                                Carregando contas...
+
+                            </td>
+
+                        </tr>
+
+                    </tbody>
+
+                </table>
+
+            </div>
+
+        </section>
+
+    </main>
+
+    <!-- =========================================================
+         TOAST
+    ========================================================== -->
+
+    <div
+        id="toast-region"
+        class="toast-region"
+        aria-live="polite">
+    </div>
+
+    <!-- =========================================================
+         BIBLIOTECAS
+    ========================================================== -->
+
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+
+    <!-- =========================================================
+         SISTEMA
+    ========================================================== -->
+
+    <script src="js/supabase.js"></script>
+
+    <script src="js/auth.js"></script>
+
+    <script src="js/app.js"></script>
+
+    <!-- =========================================================
+         CARNÊ
+    ========================================================== -->
+
+    <script src="js/carne.js"></script>
+
+    <!-- =========================================================
+         CONTAS A RECEBER
+    ========================================================== -->
+
+    <script src="js/receber.js"></script>
+
+</body>
+
+</html>

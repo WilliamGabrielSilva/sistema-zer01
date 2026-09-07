@@ -1,0 +1,17 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>SISTEMA ZER01 — Pagamentos</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/global.css"><link rel="stylesheet" href="css/pagamentos.css">
+</head>
+<body data-page="pagamentos">
+  <div id="app-shell"></div>
+  <main id="page-content" class="page-content"><aside class="sidebar" id="sidebar"><div class="brand"><img src="logo.png" alt="ZER01"><div><strong>ZER<span>01</span></strong><small>CONTROLE COMERCIAL</small></div></div><nav class="nav-primary"><a class="nav-link" href="dashboard.html"><span class="nav-icon">▦</span><span>Dashboard</span></a><a class="nav-link" href="clientes.html"><span class="nav-icon">♙</span><span>Clientes</span></a><a class="nav-link" href="vendas.html"><span class="nav-icon">＋</span><span>Nova venda</span></a><a class="nav-link" href="vendas-list.html"><span class="nav-icon">⌁</span><span>Vendas</span></a><a class="nav-link" href="receber.html"><span class="nav-icon">◷</span><span>Contas a receber</span></a><a class="nav-link active" href="pagamentos.html"><span class="nav-icon">↗</span><span>Pagamentos</span></a><a class="nav-link" href="relatorios.html"><span class="nav-icon">▤</span><span>Relatórios</span></a><a class="nav-link" href="configuracoes.html"><span class="nav-icon">⚙</span><span>Configurações</span></a></nav><div class="sidebar-bottom"><a class="nav-link" href="configuracoes.html"><span class="nav-icon">?</span><span>Central de ajuda</span></a><button class="nav-link logout" id="logout-button"><span class="nav-icon">↪</span><span>Sair</span></button></div></aside><button class="mobile-menu" id="mobile-menu" aria-label="Abrir menu">☰</button><header class="topbar"><div><span class="eyebrow">SISTEMA ZER01 / OPERAÇÃO</span><h1>Pagamentos</h1></div><div class="topbar-actions"><span class="live-dot"></span><span id="current-user">Sessão ativa</span><a class="avatar" href="configuracoes.html">Z1</a></div></header><section class="page-header"><div><h2>Pagamentos</h2><p>Histórico completo de recebimentos, com exclusão protegida por confirmação.</p></div><button class="btn btn-primary" id="new-payment">＋ Registrar recebimento</button></section><section class="panel"><div class="table-wrap"><table class="data-table"><thead><tr><th>Cliente</th><th>Parcela</th><th>Valor</th><th>Data</th><th>Forma</th><th>Transação</th><th>Status</th><th>Ação</th></tr></thead><tbody id="payments-table"></tbody></table></div></section><div id="payment-modal"></div></main>
+  <div id="toast-region" class="toast-region" aria-live="polite"></div>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="js/supabase.js"></script><script src="js/auth.js"></script><script src="js/app.js"></script>
+  <script src="js/pagamentos.js"></script>
+</body></html>
