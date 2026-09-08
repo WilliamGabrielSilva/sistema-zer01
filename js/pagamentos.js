@@ -176,6 +176,75 @@ async function openPaymentModal() {
             <div class="modal">
                 <form class="modal-card" id="payment-form">
 
+                    <style>
+                        .installment-picker { position: relative; }
+                        #payment-installment-search {
+                            width: 100%;
+                            box-sizing: border-box;
+                            padding: 10px 12px;
+                            border: 1px solid #d0d5dd;
+                            border-radius: 8px;
+                            font-size: 14px;
+                        }
+                        .installment-list {
+                            margin-top: 8px;
+                            max-height: 260px;
+                            overflow-y: auto;
+                            border: 1px solid #e4e7ec;
+                            border-radius: 8px;
+                        }
+                        .installment-item {
+                            display: flex;
+                            justify-content: space-between;
+                            align-items: center;
+                            gap: 12px;
+                            width: 100%;
+                            padding: 10px 12px;
+                            background: #111;
+                            color: #fff;
+                            border: none;
+                            border-bottom: 1px solid #eef0f3;
+                            text-align: left;
+                            cursor: pointer;
+                            font: inherit;
+                        }
+                        .installment-item:last-child { border-bottom: none; }
+                        .installment-item:hover { background: #111; }
+                        .installment-item-main { display: flex; flex-direction: column; gap: 2px; }
+                        .installment-item-main strong { font-size: 14px; }
+                        .installment-item-desc { font-size: 12px; color: #667085; }
+                        .installment-item-side { display: flex; flex-direction: column; align-items: flex-end; gap: 4px; }
+                        .installment-item-value { font-weight: 600; font-size: 13px; }
+                        .installment-badge {
+                            font-size: 11px;
+                            font-weight: 600;
+                            padding: 2px 8px;
+                            border-radius: 999px;
+                            white-space: nowrap;
+                        }
+                        .installment-badge--atrasada { background: #111; color: #b91c1c; }
+                        .installment-badge--vence-hoje { background: #111; color: #92400e; }
+                        .installment-badge--a-vencer { background: #111; color: #075985; }
+                        .installment-empty {
+                            padding: 16px 12px;
+                            text-align: center;
+                            color: #667085;
+                            font-size: 13px;
+                        }
+                        .installment-selected {
+                            display: flex;
+                            justify-content: space-between;
+                            align-items: center;
+                            gap: 12px;
+                            padding: 12px 14px;
+                            border: 1px solid #d0d5dd;
+                            border-radius: 8px;
+                            background: #f8fafc;
+                        }
+                        .installment-selected-label { display: block; font-size: 14px; }
+                        .installment-selected-value { font-size: 13px; color: #667085; }
+                    </style>
+
                     <div class="modal-head">
                         <div>
                             <span class="eyebrow">BAIXA FINANCEIRA</span>
@@ -195,29 +264,29 @@ async function openPaymentModal() {
                         <div class="field full">
                             <label>Parcela *</label>
 
-                            <select id="payment-installment" required>
-                                <option value="">
-                                    Selecione uma parcela
-                                </option>
+                            <div class="installment-picker" id="installment-picker">
 
-                                ${parts.map((p) => `
-                                    <option
-                                        value="${p.id}"
-                                        data-value="${Number(p.valor || 0) - Number(p.valor_pago || 0)}"
+                                <div id="installment-search-wrap">
+                                    <input
+                                        type="text"
+                                        id="payment-installment-search"
+                                        placeholder="Buscar por cliente, venda ou nº da parcela..."
+                                        autocomplete="off"
                                     >
-                                        ${p.vendas?.clientes?.nome || 'Cliente'}
-                                        —
-                                        parcela ${p.numero}
-                                        —
-                                        ${fmtMoney(
-                                            Number(p.valor || 0) -
-                                            Number(p.valor_pago || 0)
-                                        )}
-                                        —
-                                        vence ${dateBR(p.vencimento)}
-                                    </option>
-                                `).join('')}
-                            </select>
+                                    <div class="installment-list" id="installment-list"></div>
+                                </div>
+
+                                <div class="installment-selected" id="installment-selected" style="display:none">
+                                    <div>
+                                        <strong class="installment-selected-label"></strong><br>
+                                        <span class="installment-selected-value"></span>
+                                    </div>
+                                    <button type="button" class="btn" id="installment-change">
+                                        Trocar
+                                    </button>
+                                </div>
+
+                            </div>
                         </div>
 
                         <div class="field">
@@ -297,18 +366,138 @@ async function openPaymentModal() {
 
 
         /*
-         * Ao selecionar uma parcela,
-         * preenche automaticamente somente
-         * o valor que ainda falta pagar.
+         * Busca/seleção de parcela.
+         *
+         * Em vez de um <select> só com texto corrido,
+         * mostramos uma lista filtrável (por cliente,
+         * venda ou nº da parcela) com selo de urgência
+         * (atrasada / vence hoje / a vencer) para facilitar
+         * achar a parcela certa.
          */
-        document.getElementById('payment-installment').onchange =
-            (event) => {
+        let selectedParcela = null;
 
-                const option = event.target.selectedOptions[0];
+        function statusParcela(vencimento) {
+            const hoje = new Date(`${todayISO()}T00:00:00`);
+            const venc = new Date(`${vencimento}T00:00:00`);
+            const diffDias = Math.round((venc - hoje) / 86400000);
 
-                document.getElementById('payment-value').value =
-                    option?.dataset.value || '';
+            if (diffDias < 0) {
+                const dias = Math.abs(diffDias);
+                return {
+                    classe: 'atrasada',
+                    label: `Atrasada há ${dias} dia${dias === 1 ? '' : 's'}`
+                };
+            }
+
+            if (diffDias === 0) {
+                return { classe: 'vence-hoje', label: 'Vence hoje' };
+            }
+
+            return {
+                classe: 'a-vencer',
+                label: `Vence em ${diffDias} dia${diffDias === 1 ? '' : 's'}`
             };
+        }
+
+        function renderInstallmentList(filterText) {
+            const termo = (filterText || '').trim().toLowerCase();
+
+            const filtradas = parts.filter((p) => {
+                if (!termo) return true;
+
+                const cliente = (p.vendas?.clientes?.nome || '').toLowerCase();
+                const descricao = (p.vendas?.descricao || '').toLowerCase();
+                const numero = String(p.numero || '');
+
+                return (
+                    cliente.includes(termo) ||
+                    descricao.includes(termo) ||
+                    numero.includes(termo)
+                );
+            });
+
+            const lista = document.getElementById('installment-list');
+
+            if (!filtradas.length) {
+                lista.innerHTML =
+                    '<div class="installment-empty">Nenhuma parcela encontrada.</div>';
+                return;
+            }
+
+            lista.innerHTML = filtradas.map((p) => {
+                const restante = Number(p.valor || 0) - Number(p.valor_pago || 0);
+                const status = statusParcela(p.vencimento);
+                const cliente = display(p.vendas?.clientes?.nome);
+
+                return `
+                    <button
+                        type="button"
+                        class="installment-item"
+                        data-id="${p.id}"
+                        data-value="${restante}"
+                        data-label="${cliente} — parcela ${p.numero}"
+                    >
+                        <div class="installment-item-main">
+                            <strong>${cliente}</strong>
+                            <span class="installment-item-desc">
+                                ${display(p.vendas?.descricao)}
+                                · parcela ${p.numero}
+                                · vence ${dateBR(p.vencimento)}
+                            </span>
+                        </div>
+                        <div class="installment-item-side">
+                            <span class="installment-badge installment-badge--${status.classe}">
+                                ${status.label}
+                            </span>
+                            <span class="installment-item-value">
+                                ${fmtMoney(restante)}
+                            </span>
+                        </div>
+                    </button>
+                `;
+            }).join('');
+
+            lista.querySelectorAll('.installment-item').forEach((item) => {
+                item.onclick = () => selecionarParcela(item);
+            });
+        }
+
+        function selecionarParcela(item) {
+            selectedParcela = {
+                id: item.dataset.id,
+                valor: item.dataset.value
+            };
+
+            document.getElementById('payment-value').value =
+                item.dataset.value;
+
+            const selecionado = document.getElementById('installment-selected');
+            selecionado.querySelector('.installment-selected-label').textContent =
+                item.dataset.label;
+            selecionado.querySelector('.installment-selected-value').textContent =
+                `Falta receber: ${fmtMoney(Number(item.dataset.value))}`;
+            selecionado.style.display = 'flex';
+
+            document.getElementById('installment-search-wrap').style.display = 'none';
+        }
+
+        renderInstallmentList('');
+
+        document.getElementById('payment-installment-search').oninput =
+            (event) => renderInstallmentList(event.target.value);
+
+        document.getElementById('installment-change').onclick = () => {
+            selectedParcela = null;
+
+            document.getElementById('installment-selected').style.display = 'none';
+            document.getElementById('installment-search-wrap').style.display = 'block';
+
+            const busca = document.getElementById('payment-installment-search');
+            busca.value = '';
+            busca.focus();
+
+            renderInstallmentList('');
+        };
 
 
         document.getElementById('payment-form').onsubmit =
@@ -318,10 +507,7 @@ async function openPaymentModal() {
 
                 try {
 
-                    const parcelaId =
-                        document.getElementById(
-                            'payment-installment'
-                        ).value;
+                    const parcelaId = selectedParcela?.id || '';
 
                     const value =
                         Number(
