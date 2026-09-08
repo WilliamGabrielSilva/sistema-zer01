@@ -1,0 +1,508 @@
+/* Cofre Urbano — estilos específicos de pagamentos. */
+/* ZER01 — estilos específicos da página de pagamentos. */
+
+.open-payments-panel,
+.history-panel {
+    margin-bottom: 22px;
+}
+
+.open-payments-head,
+.history-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 20px;
+    padding: 22px 24px 18px;
+}
+
+.open-payments-head h3,
+.history-head h3 {
+    margin: 4px 0 4px;
+    font-family: "Space Grotesk", sans-serif;
+    font-size: 19px;
+}
+
+.open-payments-head p,
+.history-head p {
+    margin: 0;
+    color: #858b95;
+    font-size: 13px;
+}
+
+.open-summary {
+    flex: 0 0 auto;
+    min-width: 150px;
+    padding: 11px 14px;
+    border: 1px solid #2b3038;
+    border-radius: 10px;
+    background: #15171a;
+    color: #e8e8e8;
+    font-size: 13px;
+    text-align: center;
+}
+
+.payment-toolbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 14px;
+    padding: 0 24px 18px;
+    border-bottom: 1px solid #24282e;
+}
+
+.payment-search {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    width: min(430px, 100%);
+    min-height: 40px;
+    padding: 0 12px;
+    border: 1px solid #30353d;
+    border-radius: 9px;
+    background: #121416;
+}
+
+.payment-search span {
+    color: #888f99;
+    font-size: 18px;
+}
+
+.payment-search input {
+    width: 100%;
+    border: 0;
+    outline: 0;
+    background: transparent;
+    color: #f1f1f1;
+    font: inherit;
+}
+
+.payment-search input::placeholder {
+    color: #686e77;
+}
+
+.payment-filters {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 7px;
+}
+
+.payment-filter {
+    border: 1px solid #30353d;
+    border-radius: 8px;
+    padding: 9px 12px;
+    background: #121416;
+    color: #aeb4bc;
+    cursor: pointer;
+    font: inherit;
+    font-size: 12px;
+    transition: .15s ease;
+}
+
+.payment-filter:hover {
+    border-color: #555b65;
+    color: #fff;
+}
+
+.payment-filter.active {
+    border-color: #e51b23;
+    background: rgba(229, 27, 35, .10);
+    color: #fff;
+}
+
+.open-payments-table td:last-child,
+.open-payments-table th:last-child {
+    text-align: right;
+}
+
+.client-cell {
+    min-width: 180px;
+}
+
+.client-name {
+    display: block;
+    color: #f0f0f0;
+    font-weight: 600;
+}
+
+.client-meta {
+    display: block;
+    margin-top: 3px;
+    color: #737983;
+    font-size: 11px;
+}
+
+.installment-number {
+    font-weight: 600;
+}
+
+.due-date.overdue {
+    color: #ff777d;
+}
+
+.due-date.today {
+    color: #f2c14e;
+    font-weight: 600;
+}
+
+.due-date.next {
+    color: #aeb4bc;
+}
+
+.open-status {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 5px 8px;
+    border-radius: 999px;
+    font-size: 11px;
+    font-weight: 600;
+}
+
+.open-status.overdue {
+    background: rgba(229, 27, 35, .11);
+    color: #ff777d;
+}
+
+.open-status.today {
+    background: rgba(242, 193, 78, .10);
+    color: #f2c14e;
+}
+
+.open-status.next {
+    background: rgba(80, 170, 255, .09);
+    color: #8fc9ff;
+}
+
+.btn-receive {
+    white-space: nowrap;
+}
+
+.empty-open {
+    padding: 28px 16px !important;
+    text-align: center;
+    color: #737983;
+}
+
+/* Modal novo */
+.payment-modal-card {
+    width: min(760px, calc(100vw - 28px));
+    max-height: calc(100vh - 28px);
+    overflow: auto;
+}
+
+.payment-client-search {
+    position: relative;
+}
+
+.payment-client-search input {
+    width: 100%;
+}
+
+.client-results {
+    display: none;
+    position: absolute;
+    z-index: 20;
+    top: calc(100% + 5px);
+    left: 0;
+    right: 0;
+    max-height: 235px;
+    overflow-y: auto;
+    border: 1px solid #343a42;
+    border-radius: 9px;
+    background: #15171a;
+    box-shadow: 0 14px 35px rgba(0,0,0,.45);
+}
+
+.client-results.visible {
+    display: block;
+}
+
+.client-result {
+    width: 100%;
+    display: block;
+    padding: 11px 13px;
+    border: 0;
+    border-bottom: 1px solid #252a30;
+    background: transparent;
+    color: #eee;
+    text-align: left;
+    cursor: pointer;
+}
+
+.client-result:last-child {
+    border-bottom: 0;
+}
+
+.client-result:hover {
+    background: #20242a;
+}
+
+.client-result strong {
+    display: block;
+    font-size: 13px;
+}
+
+.client-result small {
+    display: block;
+    margin-top: 3px;
+    color: #7f8690;
+    font-size: 11px;
+}
+
+.selected-client {
+    display: none;
+    margin-top: 10px;
+    padding: 12px 14px;
+    border: 1px solid #343a42;
+    border-radius: 9px;
+    background: #15171a;
+}
+
+.selected-client.visible {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 15px;
+}
+
+.selected-client-name {
+    color: #fff;
+    font-weight: 600;
+}
+
+.selected-client-meta {
+    margin-top: 3px;
+    color: #808791;
+    font-size: 11px;
+}
+
+.clear-client {
+    border: 1px solid #3a4048;
+    border-radius: 7px;
+    background: #101214;
+    color: #aaa;
+    padding: 7px 9px;
+    cursor: pointer;
+}
+
+.clear-client:hover {
+    color: #fff;
+}
+
+.installments-box {
+    display: none;
+    margin-top: 18px;
+    border: 1px solid #2f353d;
+    border-radius: 10px;
+    overflow: hidden;
+}
+
+.installments-box.visible {
+    display: block;
+}
+
+.installments-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 12px 14px;
+    background: #17191c;
+    border-bottom: 1px solid #2a2f36;
+}
+
+.installments-head strong {
+    font-size: 13px;
+}
+
+.installment-actions {
+    display: flex;
+    gap: 7px;
+}
+
+.installment-action {
+    border: 1px solid #353b43;
+    border-radius: 7px;
+    background: #111315;
+    color: #aaa;
+    padding: 6px 9px;
+    cursor: pointer;
+    font: inherit;
+    font-size: 11px;
+}
+
+.installment-action:hover {
+    color: #fff;
+    border-color: #565d67;
+}
+
+.installment-list {
+    max-height: 270px;
+    overflow-y: auto;
+}
+
+.installment-row {
+    display: grid;
+    grid-template-columns: 28px minmax(120px, 1fr) 110px 145px;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 13px;
+    border-bottom: 1px solid #252a30;
+}
+
+.installment-row:last-child {
+    border-bottom: 0;
+}
+
+.installment-row.selected {
+    background: rgba(229, 27, 35, .055);
+}
+
+.installment-row input[type="checkbox"] {
+    width: 16px;
+    height: 16px;
+    accent-color: #e51b23;
+}
+
+.installment-info strong {
+    display: block;
+    color: #eee;
+    font-size: 12px;
+}
+
+.installment-info span {
+    display: block;
+    margin-top: 2px;
+    color: #777e88;
+    font-size: 10px;
+}
+
+.installment-due {
+    color: #b8bdc5;
+    font-size: 11px;
+}
+
+.installment-amount {
+    width: 100%;
+    min-height: 34px;
+    padding: 7px 9px;
+    border: 1px solid #353b43;
+    border-radius: 7px;
+    outline: 0;
+    background: #101214;
+    color: #fff;
+    font: inherit;
+    font-size: 12px;
+}
+
+.installment-amount:disabled {
+    opacity: .45;
+}
+
+.installments-empty {
+    padding: 20px;
+    color: #777e88;
+    text-align: center;
+    font-size: 12px;
+}
+
+.receipt-summary {
+    display: none;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 10px;
+    margin-top: 16px;
+}
+
+.receipt-summary.visible {
+    display: grid;
+}
+
+.receipt-summary-card {
+    padding: 12px 14px;
+    border: 1px solid #30353d;
+    border-radius: 9px;
+    background: #15171a;
+}
+
+.receipt-summary-card span {
+    display: block;
+    color: #777e88;
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: .05em;
+}
+
+.receipt-summary-card strong {
+    display: block;
+    margin-top: 3px;
+    color: #fff;
+    font-size: 17px;
+}
+
+.payment-form-grid {
+    margin-top: 18px;
+}
+
+.payment-form-grid.hidden {
+    display: none;
+}
+
+@media (max-width: 850px) {
+    .payment-toolbar {
+        align-items: stretch;
+        flex-direction: column;
+    }
+
+    .payment-search {
+        width: 100%;
+    }
+
+    .payment-filters {
+        overflow-x: auto;
+        flex-wrap: nowrap;
+        padding-bottom: 2px;
+    }
+
+    .payment-filter {
+        flex: 0 0 auto;
+    }
+
+    .installment-row {
+        grid-template-columns: 28px minmax(100px, 1fr) 95px;
+    }
+
+    .installment-amount {
+        grid-column: 2 / -1;
+    }
+}
+
+@media (max-width: 600px) {
+    .open-payments-head,
+    .history-head {
+        align-items: flex-start;
+        flex-direction: column;
+        padding: 18px;
+    }
+
+    .payment-toolbar {
+        padding: 0 18px 15px;
+    }
+
+    .open-summary {
+        width: 100%;
+    }
+
+    .receipt-summary {
+        grid-template-columns: 1fr;
+    }
+
+    .selected-client.visible {
+        align-items: flex-start;
+        flex-direction: column;
+    }
+
+    .installments-head {
+        align-items: flex-start;
+        flex-direction: column;
+    }
+}
