@@ -239,7 +239,7 @@ async function openPaymentModal() {
                             padding: 12px 14px;
                             border: 1px solid #d0d5dd;
                             border-radius: 8px;
-                            background: #f8fafc;
+                            background: #111;
                         }
                         .installment-selected-label { display: block; font-size: 14px; }
                         .installment-selected-value { font-size: 13px; color: #667085; }
