@@ -1929,7 +1929,7 @@ async function openPaymentModal(
                         <input
                             type="date"
                             id="payment-date"
-                            value="${getTodayISO()}"
+                            value="${todayLocalISO()}"
                             required
                         >
 
