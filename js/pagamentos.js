@@ -1,22 +1,68 @@
 /*
- * ZER01 — Pagamentos
- *
- * Fluxo:
- * 1. Mostra as parcelas em aberto para baixa rápida.
- * 2. Permite buscar por cliente, CPF ou telefone.
- * 3. Permite filtrar por hoje, atrasados e próximos.
- * 4. O recebimento é iniciado pelo cliente e depois pelas parcelas.
- * 5. Uma ou várias parcelas podem ser quitadas no mesmo recebimento.
- * 6. O histórico continua permitindo exclusão com recálculo da parcela.
- */
+=========================================================
+ZER01 — PAGAMENTOS
+=========================================================
+
+Fluxo:
+
+1. Lista parcelas em aberto.
+2. Busca por cliente, CPF ou telefone.
+3. Filtros:
+   - Todos
+   - Vencendo hoje
+   - Atrasados
+   - Próximos
+4. Botão RECEBER direto na parcela.
+5. Registro de recebimento:
+   - Cliente
+   - Parcelas
+   - Uma ou várias parcelas
+   - Valor recebido
+   - Data
+   - Forma de pagamento
+   - ID/TxID
+6. Atualiza parcela no Supabase.
+7. Mantém histórico de pagamentos.
+8. Permite exclusão do recebimento.
+=========================================================
+*/
+
+
+/* =====================================================
+   VARIÁVEIS
+===================================================== */
 
 let openInstallments = [];
-let selectedPaymentClient = null;
-let selectedPaymentParts = [];
-let currentOpenFilter = 'todos';
+
+let selectedClient = null;
+
+let currentFilter = 'todos';
+
+
+/* =====================================================
+   FUNÇÕES AUXILIARES
+===================================================== */
+
+function escapeHTML(value) {
+
+    return String(value ?? '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+}
+
+
+function digitsOnly(value) {
+
+    return String(value || '')
+        .replace(/\D/g, '');
+}
 
 
 function normalizeText(value) {
+
     return String(value || '')
         .normalize('NFD')
         .replace(/[\u0300-\u036f]/g, '')
@@ -25,95 +71,65 @@ function normalizeText(value) {
 }
 
 
-function digitsOnly(value) {
-    return String(value || '').replace(/\D/g, '');
-}
+function getTodayISO() {
 
-
-function todayLocalISO() {
     const now = new Date();
-    const offset = now.getTimezoneOffset();
+
+    const offset =
+        now.getTimezoneOffset();
 
     return new Date(
-        now.getTime() - offset * 60000
+        now.getTime() -
+        offset * 60000
     )
         .toISOString()
         .slice(0, 10);
 }
 
 
-function dateDiffFromToday(dateISO) {
-    if (!dateISO) return 0;
+function daysFromToday(date) {
+
+    if (!date) {
+        return 0;
+    }
 
     const today =
         new Date(
-            todayLocalISO() + 'T00:00:00'
+            getTodayISO() +
+            'T00:00:00'
         );
 
-    const date =
+    const target =
         new Date(
-            String(dateISO).slice(0, 10) +
+            String(date).slice(0, 10) +
             'T00:00:00'
         );
 
     return Math.round(
-        (date - today) / 86400000
+        (
+            target.getTime() -
+            today.getTime()
+        ) / 86400000
     );
 }
 
 
-function openPartStatus(part) {
+function getRemaining(part) {
 
-    const diff =
-        dateDiffFromToday(
-            part.vencimento
-        );
+    const valor =
+        Number(part?.valor || 0);
 
-    if (diff < 0) {
-
-        return {
-            key: 'atrasados',
-
-            label:
-                `Atrasada há ${Math.abs(diff)} ${
-                    Math.abs(diff) === 1
-                        ? 'dia'
-                        : 'dias'
-                }`,
-
-            className: 'overdue'
-        };
-    }
-
-    if (diff === 0) {
-
-        return {
-            key: 'hoje',
-            label: 'Vence hoje',
-            className: 'today'
-        };
-    }
-
-    return {
-        key: 'proximos',
-        label: 'Em aberto',
-        className: 'next'
-    };
-}
-
-
-function getPartRemaining(part) {
+    const pago =
+        Number(part?.valor_pago || 0);
 
     return Math.max(
         0,
-
-        Number(part.valor || 0) -
-        Number(part.valor_pago || 0)
+        valor - pago
     );
 }
 
 
-function clientFromPart(part) {
+function getClient(part) {
 
     return (
         part?.vendas?.clientes ||
@@ -122,310 +138,1236 @@ function clientFromPart(part) {
 }
 
 
-function clientName(part) {
-
-    return (
-        clientFromPart(part)?.nome ||
-        'Cliente'
-    );
-}
-
-
-function clientSearchText(part) {
-
-    const client =
-        clientFromPart(part);
-
-    return [
-        client.nome,
-        client.cpf,
-        client.telefone,
-        digitsOnly(client.cpf),
-        digitsOnly(client.telefone)
-    ]
-        .map(normalizeText)
-        .join(' ');
-}
-
-
 function getClientKey(part) {
 
     const client =
-        clientFromPart(part);
+        getClient(part);
 
-    return (
+    return String(
         client.id ||
         client.cpf ||
         client.telefone ||
         client.nome ||
-        ''
+        part.id
     );
 }
 
 
-function groupOpenPartsByClient(parts) {
+function getStatus(part) {
 
-    const groups =
-        new Map();
+    const days =
+        daysFromToday(
+            part.vencimento
+        );
 
-    parts.forEach((part) => {
 
-        const client =
-            clientFromPart(part);
+    if (days < 0) {
 
-        const key =
-            client.id ||
-            client.cpf ||
-            client.telefone ||
-            client.nome ||
-            `cliente-${part.id}`;
+        return {
+            filter: 'atrasados',
+            label:
+                days === -1
+                    ? 'Atrasada há 1 dia'
+                    : `Atrasada há ${Math.abs(days)} dias`,
+            className: 'status-atrasado'
+        };
+    }
 
-        if (!groups.has(key)) {
 
-            groups.set(key, {
+    if (days === 0) {
 
-                key,
+        return {
+            filter: 'hoje',
+            label: 'Vence hoje',
+            className: 'status-hoje'
+        };
+    }
 
-                client,
 
-                parts: []
+    return {
 
-            });
-        }
+        filter: 'proximos',
 
-        groups
-            .get(key)
-            .parts
-            .push(part);
-    });
+        label: 'Em aberto',
 
-    return Array.from(
-        groups.values()
-    );
+        className: 'status-proximo'
+    };
 }
 
 
-function filteredOpenInstallments() {
+function money(value) {
 
-    const searchInput =
-        document.getElementById(
-            'open-payment-search'
+    if (
+        typeof fmtMoney ===
+        'function'
+    ) {
+
+        return fmtMoney(
+            Number(value || 0)
         );
+    }
 
-    const search =
-        normalizeText(
-            searchInput?.value || ''
-        );
 
-    return openInstallments.filter(
-        (part) => {
-
-            const status =
-                openPartStatus(part);
-
-            const matchesFilter =
-                currentOpenFilter === 'todos' ||
-                status.key === currentOpenFilter;
-
-            if (!matchesFilter) {
-                return false;
-            }
-
-            if (!search) {
-                return true;
-            }
-
-            const text =
-                clientSearchText(part);
-
-            return (
-                text.includes(search) ||
-                text.includes(
-                    digitsOnly(search)
-                )
-            );
+    return Number(
+        value || 0
+    ).toLocaleString(
+        'pt-BR',
+        {
+            style: 'currency',
+            currency: 'BRL'
         }
     );
 }
 
 
-function renderOpenInstallments() {
+function dateFormat(value) {
 
-    const target =
-        document.getElementById(
-            'open-payments-table'
-        );
+    if (
+        typeof dateBR ===
+        'function'
+    ) {
 
-    if (!target) return;
+        return dateBR(value);
+    }
+
+
+    if (!value) {
+        return '—';
+    }
+
 
     const parts =
-        filteredOpenInstallments();
+        String(value)
+            .slice(0, 10)
+            .split('-');
 
-    if (!parts.length) {
 
-        target.innerHTML = `
-            <tr>
-                <td
-                    colspan="6"
-                    class="empty-open"
-                >
-                    Nenhuma parcela encontrada
-                    para este filtro.
-                </td>
-            </tr>
-        `;
+    if (parts.length !== 3) {
+        return value;
+    }
+
+
+    return (
+        parts[2] +
+        '/' +
+        parts[1] +
+        '/' +
+        parts[0]
+    );
+}
+
+
+function notify(
+    message,
+    type = 'success'
+) {
+
+    if (
+        typeof toast ===
+        'function'
+    ) {
+
+        toast(
+            message,
+            type
+        );
 
         return;
     }
 
-    target.innerHTML =
-        parts.map((part) => {
 
-            const status =
-                openPartStatus(part);
+    alert(message);
+}
 
-            const remaining =
-                getPartRemaining(part);
 
-            const client =
-                clientFromPart(part);
+/* =====================================================
+   CSS DA NOVA INTERFACE
+===================================================== */
 
-            return `
-                <tr>
+function injectPaymentStyles() {
 
-                    <td class="client-cell">
+    if (
+        document.getElementById(
+            'zer01-payment-styles'
+        )
+    ) {
+        return;
+    }
 
-                        <span class="client-name">
-                            ${display(
-                                client.nome ||
-                                'Cliente'
-                            )}
-                        </span>
 
-                        ${
-                            client.telefone
-                                ? `
-                                    <span class="client-meta">
-                                        ${display(
-                                            client.telefone
-                                        )}
-                                    </span>
-                                `
-                                : ''
-                        }
+    const style =
+        document.createElement('style');
 
-                    </td>
 
-                    <td>
+    style.id =
+        'zer01-payment-styles';
 
-                        <span
-                            class="installment-number"
+
+    style.textContent = `
+
+        /* ==========================================
+           ÁREA DE PARCELAS EM ABERTO
+        ========================================== */
+
+        .open-payments-panel {
+            margin-bottom: 20px;
+        }
+
+
+        .open-payments-header {
+            display:flex;
+            justify-content:space-between;
+            align-items:flex-start;
+            gap:20px;
+            margin-bottom:18px;
+        }
+
+
+        .open-payments-title {
+            margin:0;
+            font-size:20px;
+            font-weight:700;
+        }
+
+
+        .open-payments-subtitle {
+            margin-top:5px;
+            color:#777e88;
+            font-size:13px;
+        }
+
+
+        .open-payments-summary {
+            text-align:right;
+            color:#777e88;
+            font-size:13px;
+            line-height:1.6;
+        }
+
+
+        .open-payments-summary strong {
+            color:#fff;
+        }
+
+
+        .open-payments-toolbar {
+            display:flex;
+            gap:10px;
+            align-items:center;
+            margin-bottom:15px;
+            flex-wrap:wrap;
+        }
+
+
+        .open-payment-search {
+            flex:1;
+            min-width:250px;
+            height:42px;
+            padding:0 14px;
+            border-radius:8px;
+            border:1px solid #30343a;
+            background:#111315;
+            color:#fff;
+            outline:none;
+        }
+
+
+        .open-payment-search:focus {
+            border-color:#e60000;
+        }
+
+
+        .payment-filter {
+            border:1px solid #30343a;
+            background:#151719;
+            color:#9ca3ad;
+            padding:9px 13px;
+            border-radius:8px;
+            cursor:pointer;
+            transition:.2s;
+        }
+
+
+        .payment-filter:hover {
+            border-color:#555;
+            color:#fff;
+        }
+
+
+        .payment-filter.active {
+            background:#240000;
+            border-color:#e60000;
+            color:#fff;
+        }
+
+
+        .open-payments-table td {
+            vertical-align:middle;
+        }
+
+
+        .client-name-payment {
+            display:block;
+            font-weight:600;
+            color:#fff;
+        }
+
+
+        .client-phone-payment {
+            display:block;
+            margin-top:3px;
+            color:#777e88;
+            font-size:12px;
+        }
+
+
+        .payment-date-status {
+            display:inline-block;
+            font-weight:600;
+        }
+
+
+        .payment-date-status.status-atrasado {
+            color:#ff6b6b;
+        }
+
+
+        .payment-date-status.status-hoje {
+            color:#ffc107;
+        }
+
+
+        .payment-date-status.status-proximo {
+            color:#7db7ff;
+        }
+
+
+        .open-status-badge {
+            display:inline-flex;
+            align-items:center;
+            padding:5px 8px;
+            border-radius:6px;
+            font-size:11px;
+            font-weight:600;
+            white-space:nowrap;
+        }
+
+
+        .open-status-badge.status-atrasado {
+            background:#2b1111;
+            color:#ff7777;
+        }
+
+
+        .open-status-badge.status-hoje {
+            background:#2b2209;
+            color:#ffc947;
+        }
+
+
+        .open-status-badge.status-proximo {
+            background:#101d30;
+            color:#78aefc;
+        }
+
+
+        .receive-payment-btn {
+            padding:8px 12px;
+            font-size:12px;
+            white-space:nowrap;
+        }
+
+
+        /* ==========================================
+           MODAL
+        ========================================== */
+
+        .payment-modal-overlay {
+            position:fixed;
+            inset:0;
+            z-index:9999;
+            background:rgba(0,0,0,.78);
+            display:flex;
+            align-items:center;
+            justify-content:center;
+            padding:20px;
+        }
+
+
+        .payment-modal-card {
+            width:min(760px, 100%);
+            max-height:90vh;
+            overflow:auto;
+            background:#1a1d21;
+            border:1px solid #383d44;
+            border-radius:10px;
+            box-shadow:0 25px 80px rgba(0,0,0,.65);
+            color:#fff;
+            padding:24px;
+        }
+
+
+        .payment-modal-head {
+            display:flex;
+            justify-content:space-between;
+            align-items:flex-start;
+            gap:20px;
+            margin-bottom:24px;
+        }
+
+
+        .payment-modal-head h3 {
+            margin:4px 0 0;
+            font-size:21px;
+        }
+
+
+        .payment-modal-close {
+            width:34px;
+            height:34px;
+            border-radius:7px;
+            border:1px solid #3b4148;
+            background:#17191c;
+            color:#9da4ad;
+            cursor:pointer;
+            font-size:18px;
+        }
+
+
+        .payment-modal-close:hover {
+            color:#fff;
+            border-color:#666;
+        }
+
+
+        .payment-label {
+            display:block;
+            font-size:12px;
+            font-weight:600;
+            color:#aeb5be;
+            margin-bottom:7px;
+        }
+
+
+        .payment-search-wrap {
+            position:relative;
+        }
+
+
+        .payment-client-search {
+            width:100%;
+            height:44px;
+            box-sizing:border-box;
+            padding:0 14px 0 42px;
+            border:1px solid #3a4047;
+            background:#111315;
+            color:#fff;
+            border-radius:8px;
+            outline:none;
+        }
+
+
+        .payment-client-search:focus {
+            border-color:#e60000;
+        }
+
+
+        .payment-search-icon {
+            position:absolute;
+            left:14px;
+            top:50%;
+            transform:translateY(-50%);
+            color:#8c949e;
+            pointer-events:none;
+        }
+
+
+        .client-results {
+            display:none;
+            margin-top:6px;
+            border:1px solid #383e45;
+            border-radius:8px;
+            background:#121416;
+            overflow:hidden;
+            max-height:250px;
+            overflow-y:auto;
+        }
+
+
+        .client-results.visible {
+            display:block;
+        }
+
+
+        .client-result-item {
+            width:100%;
+            border:0;
+            border-bottom:1px solid #292d32;
+            background:#121416;
+            color:#fff;
+            padding:12px 14px;
+            cursor:pointer;
+            display:flex;
+            justify-content:space-between;
+            align-items:center;
+            gap:15px;
+            text-align:left;
+        }
+
+
+        .client-result-item:last-child {
+            border-bottom:0;
+        }
+
+
+        .client-result-item:hover {
+            background:#1d2024;
+        }
+
+
+        .client-result-name {
+            font-weight:600;
+            display:block;
+        }
+
+
+        .client-result-info {
+            display:block;
+            margin-top:4px;
+            color:#777e88;
+            font-size:12px;
+        }
+
+
+        .client-result-total {
+            text-align:right;
+            white-space:nowrap;
+        }
+
+
+        .client-result-total small {
+            display:block;
+            color:#777e88;
+            margin-bottom:3px;
+        }
+
+
+        .client-result-total strong {
+            color:#fff;
+        }
+
+
+        .selected-client-card {
+            margin-top:12px;
+            padding:15px;
+            border:1px solid #353b42;
+            border-radius:8px;
+            background:#151719;
+            display:flex;
+            align-items:center;
+            gap:15px;
+        }
+
+
+        .selected-client-info {
+            flex:1;
+        }
+
+
+        .selected-client-info small {
+            display:block;
+            margin-top:5px;
+            color:#858d97;
+        }
+
+
+        .selected-client-debt {
+            text-align:right;
+            padding-left:15px;
+            border-left:1px solid #30353b;
+        }
+
+
+        .selected-client-debt span {
+            display:block;
+            font-size:11px;
+            color:#858d97;
+            margin-bottom:3px;
+        }
+
+
+        .selected-client-debt strong {
+            font-size:16px;
+        }
+
+
+        .change-client-btn {
+            border:0;
+            background:none;
+            color:#777e88;
+            cursor:pointer;
+            font-size:18px;
+            padding:5px;
+        }
+
+
+        .change-client-btn:hover {
+            color:#fff;
+        }
+
+
+        .payment-section {
+            margin-top:22px;
+        }
+
+
+        .payment-section-head {
+            display:flex;
+            justify-content:space-between;
+            align-items:flex-end;
+            gap:15px;
+            margin-bottom:10px;
+        }
+
+
+        .payment-help {
+            display:block;
+            margin-top:3px;
+            color:#777e88;
+            font-size:12px;
+        }
+
+
+        .installment-actions {
+            display:flex;
+            gap:7px;
+        }
+
+
+        .installment-action {
+            border:1px solid #383e45;
+            background:#151719;
+            color:#aeb5be;
+            padding:7px 10px;
+            border-radius:6px;
+            cursor:pointer;
+            font-size:11px;
+        }
+
+
+        .installment-action:hover {
+            color:#fff;
+            border-color:#666;
+        }
+
+
+        .installments-list {
+            display:flex;
+            flex-direction:column;
+            gap:7px;
+            max-height:300px;
+            overflow-y:auto;
+            padding-right:3px;
+        }
+
+
+        .installment-item {
+            display:grid;
+            grid-template-columns:30px 1fr auto 125px;
+            gap:12px;
+            align-items:center;
+            padding:12px;
+            border:1px solid #30353b;
+            border-radius:8px;
+            background:#141618;
+            transition:.15s;
+        }
+
+
+        .installment-item.selected {
+            border-color:#7d1717;
+            background:#1d1515;
+        }
+
+
+        .installment-checkbox {
+            width:18px;
+            height:18px;
+            accent-color:#e60000;
+            cursor:pointer;
+        }
+
+
+        .installment-number {
+            font-weight:600;
+        }
+
+
+        .installment-meta {
+            display:block;
+            color:#777e88;
+            font-size:11px;
+            margin-top:3px;
+        }
+
+
+        .installment-value {
+            text-align:right;
+        }
+
+
+        .installment-value small {
+            display:block;
+            color:#777e88;
+            font-size:10px;
+        }
+
+
+        .installment-value strong {
+            font-size:14px;
+        }
+
+
+        .installment-receive {
+            width:100%;
+            box-sizing:border-box;
+            height:34px;
+            border:1px solid #363c43;
+            border-radius:6px;
+            background:#0f1113;
+            color:#fff;
+            padding:0 8px;
+        }
+
+
+        .installment-receive:disabled {
+            opacity:.35;
+            cursor:not-allowed;
+        }
+
+
+        .receipt-summary {
+            display:grid;
+            grid-template-columns:1fr 1fr;
+            gap:10px;
+            margin-top:18px;
+        }
+
+
+        .receipt-summary-box {
+            padding:13px;
+            border:1px solid #343a41;
+            border-radius:8px;
+            background:#151719;
+        }
+
+
+        .receipt-summary-box span {
+            display:block;
+            color:#777e88;
+            font-size:11px;
+            margin-bottom:4px;
+        }
+
+
+        .receipt-summary-box strong {
+            font-size:18px;
+        }
+
+
+        .payment-form-grid {
+            display:grid;
+            grid-template-columns:1fr 1fr;
+            gap:14px;
+            margin-top:18px;
+            padding-top:18px;
+            border-top:1px solid #30353b;
+        }
+
+
+        .payment-field {
+            min-width:0;
+        }
+
+
+        .payment-field.full {
+            grid-column:1 / -1;
+        }
+
+
+        .payment-field input,
+        .payment-field select {
+            width:100%;
+            height:40px;
+            box-sizing:border-box;
+            border:1px solid #373d44;
+            border-radius:7px;
+            background:#111315;
+            color:#fff;
+            padding:0 11px;
+            outline:none;
+        }
+
+
+        .payment-field input:focus,
+        .payment-field select:focus {
+            border-color:#e60000;
+        }
+
+
+        .payment-modal-actions {
+            display:flex;
+            justify-content:flex-end;
+            gap:8px;
+            margin-top:22px;
+            padding-top:18px;
+            border-top:1px solid #30353b;
+        }
+
+
+        .payment-empty {
+            padding:30px 15px;
+            text-align:center;
+            color:#777e88;
+        }
+
+
+        @media(max-width:700px) {
+
+            .open-payments-header {
+                flex-direction:column;
+            }
+
+            .open-payments-summary {
+                text-align:left;
+            }
+
+            .payment-section-head {
+                flex-direction:column;
+                align-items:flex-start;
+            }
+
+            .installment-item {
+                grid-template-columns:30px 1fr;
+            }
+
+            .installment-value {
+                text-align:left;
+                grid-column:2;
+            }
+
+            .installment-receive {
+                grid-column:2;
+            }
+
+            .receipt-summary {
+                grid-template-columns:1fr;
+            }
+
+            .payment-form-grid {
+                grid-template-columns:1fr;
+            }
+
+            .payment-field.full {
+                grid-column:auto;
+            }
+
+            .selected-client-card {
+                flex-wrap:wrap;
+            }
+
+            .selected-client-debt {
+                width:100%;
+                text-align:left;
+                padding:10px 0 0;
+                border-left:0;
+                border-top:1px solid #30353b;
+            }
+        }
+
+    `;
+
+
+    document.head.appendChild(
+        style
+    );
+}
+
+
+/* =====================================================
+   CRIA A ÁREA DE PARCELAS EM ABERTO
+===================================================== */
+
+function createOpenPaymentsArea() {
+
+    if (
+        document.getElementById(
+            'open-payments-area'
+        )
+    ) {
+        return;
+    }
+
+
+    const historyPanel =
+        document.querySelector(
+            '#payments-table'
+        )?.closest('.panel');
+
+
+    if (!historyPanel) {
+        return;
+    }
+
+
+    const panel =
+        document.createElement(
+            'section'
+        );
+
+
+    panel.className =
+        'panel open-payments-panel';
+
+
+    panel.id =
+        'open-payments-area';
+
+
+    panel.innerHTML = `
+
+        <div class="open-payments-header">
+
+            <div>
+
+                <span class="eyebrow">
+                    BAIXA RÁPIDA
+                </span>
+
+                <h2 class="open-payments-title">
+                    Parcelas em aberto
+                </h2>
+
+                <div class="open-payments-subtitle">
+                    Encontre o cliente e registre
+                    o recebimento diretamente.
+                </div>
+
+            </div>
+
+
+            <div
+                id="open-payments-summary"
+                class="open-payments-summary"
+            >
+                Carregando...
+            </div>
+
+        </div>
+
+
+        <div class="open-payments-toolbar">
+
+            <input
+                type="text"
+                id="open-payment-search"
+                class="open-payment-search"
+                placeholder="🔍  Buscar por nome, CPF ou telefone..."
+            >
+
+
+            <button
+                type="button"
+                class="payment-filter active"
+                data-filter="todos"
+            >
+                Todos
+            </button>
+
+
+            <button
+                type="button"
+                class="payment-filter"
+                data-filter="hoje"
+            >
+                Vencendo hoje
+            </button>
+
+
+            <button
+                type="button"
+                class="payment-filter"
+                data-filter="atrasados"
+            >
+                Atrasados
+            </button>
+
+
+            <button
+                type="button"
+                class="payment-filter"
+                data-filter="proximos"
+            >
+                Próximos
+            </button>
+
+        </div>
+
+
+        <div class="table-wrap">
+
+            <table class="data-table">
+
+                <thead>
+
+                    <tr>
+
+                        <th>
+                            Cliente
+                        </th>
+
+                        <th>
+                            Parcela
+                        </th>
+
+                        <th>
+                            Vencimento
+                        </th>
+
+                        <th>
+                            Valor
+                        </th>
+
+                        <th>
+                            Situação
+                        </th>
+
+                        <th>
+                            Ação
+                        </th>
+
+                    </tr>
+
+                </thead>
+
+
+                <tbody
+                    id="open-payments-table"
+                >
+
+                    <tr>
+
+                        <td
+                            colspan="6"
+                            class="payment-empty"
                         >
-                            ${part.numero || '—'}
-                        </span>
+                            Carregando parcelas...
+                        </td>
 
-                    </td>
+                    </tr>
 
-                    <td>
+                </tbody>
 
-                        <span
-                            class="due-date ${status.className}"
-                        >
-                            ${dateBR(
-                                part.vencimento
-                            )}
-                        </span>
+            </table>
 
-                    </td>
+        </div>
 
-                    <td>
-                        <strong>
-                            ${fmtMoney(
-                                remaining
-                            )}
-                        </strong>
-                    </td>
+    `;
 
-                    <td>
 
-                        <span
-                            class="open-status ${status.className}"
-                        >
-                            ${status.label}
-                        </span>
-
-                    </td>
-
-                    <td>
-
-                        <button
-                            type="button"
-                            class="btn btn-primary btn-receive receive-open-payment"
-                            data-part-id="${part.id}"
-                        >
-                            Receber
-                        </button>
-
-                    </td>
-
-                </tr>
-            `;
-
-        }).join('');
+    historyPanel.parentNode.insertBefore(
+        panel,
+        historyPanel
+    );
 
 
     document
         .querySelectorAll(
-            '.receive-open-payment'
+            '.payment-filter'
         )
         .forEach((button) => {
 
-            button.onclick = () => {
+            button.addEventListener(
+                'click',
+                () => {
 
-                const part =
-                    openInstallments.find(
-                        (item) =>
-                            String(item.id) ===
-                            String(
-                                button.dataset.partId
-                            )
-                    );
+                    currentFilter =
+                        button.dataset.filter ||
+                        'todos';
 
-                if (!part) return;
 
-                openPaymentModal({
+                    document
+                        .querySelectorAll(
+                            '.payment-filter'
+                        )
+                        .forEach((item) => {
 
-                    clientKey:
-                        getClientKey(part),
+                            item.classList.toggle(
+                                'active',
+                                item === button
+                            );
+                        });
 
-                    partId:
-                        part.id
 
-                });
-            };
+                    renderOpenPayments();
+                }
+            );
         });
+
+
+    document
+        .getElementById(
+            'open-payment-search'
+        )
+        ?.addEventListener(
+            'input',
+            renderOpenPayments
+        );
 }
 
 
-function updateOpenSummary() {
+/* =====================================================
+   CARREGA PARCELAS EM ABERTO
+===================================================== */
 
-    const summary =
+async function loadOpenInstallments() {
+
+    const tbody =
         document.getElementById(
-            'open-summary'
+            'open-payments-table'
         );
 
-    if (!summary) return;
+
+    if (!tbody) {
+        return;
+    }
+
+
+    try {
+
+        /*
+         * Usamos a mesma relação já existente
+         * no sistema:
+         *
+         * parcelas
+         *   -> vendas
+         *      -> clientes
+         *
+         * O arquivo original já utiliza essa
+         * relação para carregar pagamentos.
+         */
+
+        const rows =
+            await supabaseQuery(
+                (c) =>
+                    c
+                        .from('parcelas')
+                        .select(`
+                            id,
+                            numero,
+                            valor,
+                            vencimento,
+                            status,
+                            valor_pago,
+                            vendas(
+                                descricao,
+                                clientes(*)
+                            )
+                        `)
+                        .neq(
+                            'status',
+                            'paga'
+                        )
+                        .order(
+                            'vencimento',
+                            {
+                                ascending:true
+                            }
+                        )
+            ) || [];
+
+
+        openInstallments =
+            rows.filter(
+                (part) =>
+                    getRemaining(part) > 0
+            );
+
+
+        renderOpenPayments();
+
+
+        updateOpenSummary();
+
+
+    } catch (error) {
+
+        console.error(
+            'Erro ao carregar parcelas:',
+            error
+        );
+
+
+        tbody.innerHTML = `
+
+            <tr>
+
+                <td
+                    colspan="6"
+                    class="payment-empty"
+                >
+                    Não foi possível carregar
+                    as parcelas em aberto.
+                </td>
+
+            </tr>
+
+        `;
+
+
+        const summary =
+            document.getElementById(
+                'open-payments-summary'
+            );
+
+
+        if (summary) {
+
+            summary.textContent =
+                'Erro ao carregar';
+        }
+    }
+}
+
+
+/* =====================================================
+   RESUMO
+===================================================== */
+
+function updateOpenSummary() {
+
+    const element =
+        document.getElementById(
+            'open-payments-summary'
+        );
+
+
+    if (!element) {
+        return;
+    }
+
 
     const total =
         openInstallments.reduce(
             (sum, part) =>
                 sum +
-                getPartRemaining(part),
+                getRemaining(part),
 
             0
         );
 
-    summary.innerHTML = `
+
+    element.innerHTML = `
 
         <strong>
             ${openInstallments.length}
@@ -442,493 +1384,963 @@ function updateOpenSummary() {
         <br>
 
         <strong>
-            ${fmtMoney(total)}
+            ${money(total)}
         </strong>
 
         a receber
+
     `;
 }
 
 
-async function loadOpenInstallments() {
+/* =====================================================
+   RENDERIZA PARCELAS
+===================================================== */
 
-    try {
+function renderOpenPayments() {
 
-        openInstallments =
-            await supabaseQuery((c) =>
-                c
-                    .from('parcelas')
-                    .select(`
-                        id,
-                        numero,
-                        valor,
-                        vencimento,
-                        status,
-                        valor_pago,
-                        vendas(
-                            descricao,
-                            clientes(
-                                id,
-                                nome,
-                                cpf,
-                                telefone
-                            )
-                        )
-                    `)
-                    .neq(
-                        'status',
-                        'paga'
-                    )
-                    .order(
-                        'vencimento',
-                        {
-                            ascending: true
-                        }
-                    )
-            ) || [];
-
-        updateOpenSummary();
-
-        renderOpenInstallments();
-
-    } catch (error) {
-
-        console.error(error);
-
-        openInstallments = [];
-
-        const target =
-            document.getElementById(
-                'open-payments-table'
-            );
-
-        if (target) {
-
-            target.innerHTML = `
-                <tr>
-
-                    <td
-                        colspan="6"
-                        class="empty-open"
-                    >
-                        Não foi possível carregar
-                        as parcelas em aberto.
-                    </td>
-
-                </tr>
-            `;
-        }
-
-        const summary =
-            document.getElementById(
-                'open-summary'
-            );
-
-        if (summary) {
-
-            summary.textContent =
-                'Erro ao carregar';
-        }
-    }
-}
-
-
-async function loadPayments() {
-
-    try {
-
-        const rows =
-            await supabaseQuery((c) =>
-                c
-                    .from('pagamentos')
-                    .select(`
-                        *,
-                        parcelas(
-                            numero,
-                            vencimento,
-                            valor,
-                            vendas(
-                                descricao,
-                                clientes(nome)
-                            )
-                        )
-                    `)
-                    .order(
-                        'data_pagamento',
-                        {
-                            ascending: false
-                        }
-                    )
-            ) || [];
-
-
+    const tbody =
         document.getElementById(
-            'payments-table'
-        ).innerHTML =
-
-            rows.map((p) => `
-
-                <tr>
-
-                    <td>
-                        ${display(
-                            p.parcelas
-                                ?.vendas
-                                ?.clientes
-                                ?.nome
-                        )}
-                    </td>
-
-                    <td>
-                        ${
-                            p.parcelas?.numero ||
-                            '—'
-                        }
-                    </td>
-
-                    <td>
-                        ${fmtMoney(p.valor)}
-                    </td>
-
-                    <td>
-                        ${dateBR(
-                            p.data_pagamento
-                        )}
-                    </td>
-
-                    <td>
-                        ${display(
-                            p.forma_pagamento
-                        )}
-                    </td>
-
-                    <td>
-                        ${display(
-                            p.txid ||
-                            p.id_transacao
-                        )}
-                    </td>
-
-                    <td>
-                        ${statusHTML(
-                            'paga',
-                            p.status ||
-                            'Confirmado'
-                        )}
-                    </td>
-
-                    <td>
-
-                        <button
-                            class="btn btn-danger delete-payment"
-                            data-id="${p.id}"
-                        >
-                            Excluir
-                        </button>
-
-                    </td>
-
-                </tr>
-
-            `).join('')
-
-            ||
-
-            `
-                <tr>
-                    <td
-                        colspan="8"
-                        class="empty"
-                    >
-                        Nenhum pagamento registrado.
-                    </td>
-                </tr>
-            `;
-
-
-        document
-            .querySelectorAll(
-                '.delete-payment'
-            )
-            .forEach((button) => {
-
-                button.onclick =
-                    async () => {
-
-                        if (
-                            !confirm(
-                                'Excluir este recebimento do histórico?'
-                            )
-                        ) {
-                            return;
-                        }
-
-                        try {
-
-                            const pagamento =
-                                await supabaseQuery(
-                                    (c) =>
-                                        c
-                                            .from(
-                                                'pagamentos'
-                                            )
-                                            .select(
-                                                'id, parcela_id'
-                                            )
-                                            .eq(
-                                                'id',
-                                                button.dataset.id
-                                            )
-                                            .single()
-                                );
-
-
-                            if (!pagamento) {
-
-                                throw new Error(
-                                    'Recebimento não encontrado.'
-                                );
-                            }
-
-
-                            const parcelaId =
-                                pagamento.parcela_id;
-
-
-                            await supabaseQuery(
-                                (c) =>
-                                    c
-                                        .from(
-                                            'pagamentos'
-                                        )
-                                        .delete()
-                                        .eq(
-                                            'id',
-                                            button.dataset.id
-                                        )
-                            );
-
-
-                            const pagamentosRestantes =
-                                await supabaseQuery(
-                                    (c) =>
-                                        c
-                                            .from(
-                                                'pagamentos'
-                                            )
-                                            .select(
-                                                'valor'
-                                            )
-                                            .eq(
-                                                'parcela_id',
-                                                parcelaId
-                                            )
-                                ) || [];
-
-
-                            const totalPago =
-                                pagamentosRestantes.reduce(
-                                    (
-                                        total,
-                                        pagamento
-                                    ) =>
-                                        total +
-                                        Number(
-                                            pagamento.valor ||
-                                            0
-                                        ),
-
-                                    0
-                                );
-
-
-                            const parcela =
-                                await supabaseQuery(
-                                    (c) =>
-                                        c
-                                            .from(
-                                                'parcelas'
-                                            )
-                                            .select(
-                                                'valor'
-                                            )
-                                            .eq(
-                                                'id',
-                                                parcelaId
-                                            )
-                                            .single()
-                                );
-
-
-                            if (!parcela) {
-
-                                throw new Error(
-                                    'Parcela relacionada não encontrada.'
-                                );
-                            }
-
-
-                            const valorParcela =
-                                Number(
-                                    parcela.valor ||
-                                    0
-                                );
-
-
-                            let novoStatus =
-                                'pendente';
-
-
-                            if (
-                                totalPago >=
-                                valorParcela
-                            ) {
-
-                                novoStatus =
-                                    'paga';
-                            }
-
-
-                            await supabaseQuery(
-                                (c) =>
-                                    c
-                                        .from(
-                                            'parcelas'
-                                        )
-                                        .update({
-
-                                            status:
-                                                novoStatus,
-
-                                            valor_pago:
-                                                totalPago,
-
-                                            data_pagamento:
-                                                totalPago >=
-                                                valorParcela
-                                                    ? parcela.data_pagamento
-                                                    : null
-
-                                        })
-                                        .eq(
-                                            'id',
-                                            parcelaId
-                                        )
-                            );
-
-
-                            toast(
-                                'Recebimento excluído e parcela atualizada.'
-                            );
-
-
-                            await Promise.all([
-                                loadPayments(),
-                                loadOpenInstallments()
-                            ]);
-
-                        } catch (error) {
-
-                            console.error(error);
-
-                            toast(
-                                error.message ||
-                                'Erro ao excluir recebimento.',
-                                'error'
-                            );
-                        }
-                    };
-            });
-
-    } catch (error) {
-
-        console.error(error);
-
-        document.getElementById(
-            'payments-table'
-        ).innerHTML = `
-            <tr>
-
-                <td
-                    colspan="8"
-                    class="empty"
-                >
-                    Configure o Supabase
-                    para carregar pagamentos.
-                </td>
-
-            </tr>
-        `;
-    }
-}
-
-
-function renderClientResults(searchValue) {
-
-    const results =
-        document.getElementById(
-            'client-results'
+            'open-payments-table'
         );
 
-    if (!results) return;
+
+    if (!tbody) {
+        return;
+    }
+
+
+    const searchInput =
+        document.getElementById(
+            'open-payment-search'
+        );
+
 
     const search =
         normalizeText(
-            searchValue
-        );
-
-    const groups =
-        groupOpenPartsByClient(
-            openInstallments
+            searchInput?.value || ''
         );
 
 
-    let filtered =
-        groups.filter(
-            (group) => {
+    const searchDigits =
+        digitsOnly(search);
+
+
+    const filtered =
+        openInstallments.filter(
+            (part) => {
+
+                const status =
+                    getStatus(part);
+
+
+                if (
+                    currentFilter !==
+                    'todos' &&
+                    status.filter !==
+                    currentFilter
+                ) {
+
+                    return false;
+                }
+
 
                 if (!search) {
                     return true;
                 }
 
-                const client =
-                    group.client;
 
-                const text = [
-                    client.nome,
-                    client.cpf,
-                    client.telefone,
+                const client =
+                    getClient(part);
+
+
+                const text =
+                    normalizeText(
+                        [
+                            client.nome,
+                            client.cpf,
+                            client.telefone
+                        ].join(' ')
+                    );
+
+
+                const digits =
                     digitsOnly(
-                        client.cpf
-                    ),
-                    digitsOnly(
-                        client.telefone
-                    )
-                ]
-                    .map(normalizeText)
-                    .join(' ');
+                        [
+                            client.cpf,
+                            client.telefone
+                        ].join(' ')
+                    );
+
 
                 return (
                     text.includes(search) ||
-                    text.includes(
-                        digitsOnly(search)
+                    (
+                        searchDigits &&
+                        digits.includes(
+                            searchDigits
+                        )
                     )
                 );
             }
         );
 
 
-    filtered =
-        filtered.slice(0, 10);
-
-
     if (!filtered.length) {
 
+        tbody.innerHTML = `
+
+            <tr>
+
+                <td
+                    colspan="6"
+                    class="payment-empty"
+                >
+                    Nenhuma parcela encontrada.
+                </td>
+
+            </tr>
+
+        `;
+
+        return;
+    }
+
+
+    tbody.innerHTML =
+        filtered.map((part) => {
+
+            const client =
+                getClient(part);
+
+
+            const status =
+                getStatus(part);
+
+
+            const remaining =
+                getRemaining(part);
+
+
+            return `
+
+                <tr>
+
+                    <td>
+
+                        <span
+                            class="client-name-payment"
+                        >
+                            ${escapeHTML(
+                                client.nome ||
+                                'Cliente'
+                            )}
+                        </span>
+
+                        ${
+                            client.telefone
+                                ? `
+                                    <span
+                                        class="client-phone-payment"
+                                    >
+                                        ${escapeHTML(
+                                            client.telefone
+                                        )}
+                                    </span>
+                                `
+                                : ''
+                        }
+
+                    </td>
+
+
+                    <td>
+
+                        ${
+                            part.numero ||
+                            '—'
+                        }
+
+                    </td>
+
+
+                    <td>
+
+                        <span
+                            class="payment-date-status ${status.className}"
+                        >
+                            ${dateFormat(
+                                part.vencimento
+                            )}
+                        </span>
+
+                    </td>
+
+
+                    <td>
+
+                        <strong>
+                            ${money(
+                                remaining
+                            )}
+                        </strong>
+
+                    </td>
+
+
+                    <td>
+
+                        <span
+                            class="open-status-badge ${status.className}"
+                        >
+                            ${status.label}
+                        </span>
+
+                    </td>
+
+
+                    <td>
+
+                        <button
+                            type="button"
+                            class="btn btn-primary receive-payment-btn"
+                            data-part-id="${part.id}"
+                        >
+                            Receber
+                        </button>
+
+                    </td>
+
+                </tr>
+
+            `;
+
+        }).join('');
+
+
+    document
+        .querySelectorAll(
+            '.receive-payment-btn'
+        )
+        .forEach((button) => {
+
+            button.addEventListener(
+                'click',
+                () => {
+
+                    const part =
+                        openInstallments.find(
+                            (item) =>
+                                String(item.id) ===
+                                String(
+                                    button.dataset.partId
+                                )
+                        );
+
+
+                    if (!part) {
+                        return;
+                    }
+
+
+                    openPaymentModal(
+                        part.id
+                    );
+                }
+            );
+        });
+}
+
+
+/* =====================================================
+   ABRE MODAL
+===================================================== */
+
+async function openPaymentModal(
+    preferredPartId = null
+) {
+
+    /*
+     * Se por algum motivo ainda não carregou,
+     * tentamos carregar novamente.
+     */
+
+    if (
+        !openInstallments.length
+    ) {
+
+        await loadOpenInstallments();
+    }
+
+
+    const modal =
+        document.getElementById(
+            'payment-modal'
+        );
+
+
+    if (!modal) {
+        return;
+    }
+
+
+    selectedClient =
+        null;
+
+
+    modal.innerHTML = `
+
+        <div
+            class="payment-modal-overlay"
+            id="payment-modal-overlay"
+        >
+
+            <form
+                class="payment-modal-card"
+                id="payment-form"
+            >
+
+                <div
+                    class="payment-modal-head"
+                >
+
+                    <div>
+
+                        <span class="eyebrow">
+                            BAIXA FINANCEIRA
+                        </span>
+
+                        <h3>
+                            Registrar recebimento
+                        </h3>
+
+                    </div>
+
+
+                    <button
+                        type="button"
+                        class="payment-modal-close"
+                        id="close-payment-modal"
+                    >
+                        ×
+                    </button>
+
+                </div>
+
+
+                <!-- CLIENTE -->
+
+                <div>
+
+                    <label
+                        class="payment-label"
+                    >
+                        Cliente
+                    </label>
+
+
+                    <div
+                        class="payment-search-wrap"
+                    >
+
+                        <span
+                            class="payment-search-icon"
+                        >
+                            🔍
+                        </span>
+
+
+                        <input
+                            type="text"
+                            id="payment-client-search"
+                            class="payment-client-search"
+                            autocomplete="off"
+                            placeholder="Digite nome, CPF ou telefone..."
+                        >
+
+                    </div>
+
+
+                    <div
+                        id="client-results"
+                        class="client-results"
+                    ></div>
+
+
+                    <div
+                        id="selected-client-area"
+                    ></div>
+
+                </div>
+
+
+                <!-- PARCELAS -->
+
+                <div
+                    class="payment-section"
+                >
+
+                    <div
+                        class="payment-section-head"
+                    >
+
+                        <div>
+
+                            <label
+                                class="payment-label"
+                            >
+                                Parcelas em aberto
+                            </label>
+
+                            <span
+                                class="payment-help"
+                            >
+                                Selecione uma ou várias
+                                parcelas para receber.
+                            </span>
+
+                        </div>
+
+
+                        <div
+                            class="installment-actions"
+                        >
+
+                            <button
+                                type="button"
+                                class="installment-action"
+                                id="select-next-payment"
+                            >
+                                Próxima parcela
+                            </button>
+
+
+                            <button
+                                type="button"
+                                class="installment-action"
+                                id="select-all-payments"
+                            >
+                                Selecionar todas
+                            </button>
+
+                        </div>
+
+                    </div>
+
+
+                    <div
+                        id="installments-list"
+                        class="installments-list"
+                    >
+
+                        <div
+                            class="payment-empty"
+                        >
+                            Primeiro selecione um cliente.
+                        </div>
+
+                    </div>
+
+                </div>
+
+
+                <!-- RESUMO -->
+
+                <div
+                    class="receipt-summary"
+                >
+
+                    <div
+                        class="receipt-summary-box"
+                    >
+
+                        <span>
+                            Parcelas selecionadas
+                        </span>
+
+                        <strong
+                            id="selected-count"
+                        >
+                            0
+                        </strong>
+
+                    </div>
+
+
+                    <div
+                        class="receipt-summary-box"
+                    >
+
+                        <span>
+                            Total do recebimento
+                        </span>
+
+                        <strong
+                            id="selected-total"
+                        >
+                            R$ 0,00
+                        </strong>
+
+                    </div>
+
+                </div>
+
+
+                <!-- FORMULÁRIO -->
+
+                <div
+                    class="payment-form-grid"
+                    id="payment-extra-fields"
+                    style="display:none;"
+                >
+
+                    <div
+                        class="payment-field"
+                    >
+
+                        <label
+                            class="payment-label"
+                        >
+                            Data do recebimento *
+                        </label>
+
+
+                        <input
+                            type="date"
+                            id="payment-date"
+                            value="${getTodayISO()}"
+                            required
+                        >
+
+                    </div>
+
+
+                    <div
+                        class="payment-field"
+                    >
+
+                        <label
+                            class="payment-label"
+                        >
+                            Forma de pagamento
+                        </label>
+
+
+                        <select
+                            id="payment-method"
+                        >
+
+                            <option value="dinheiro">
+                                Dinheiro
+                            </option>
+
+                            <option value="pix">
+                                PIX
+                            </option>
+
+                            <option value="cartao">
+                                Cartão
+                            </option>
+
+                            <option value="outros">
+                                Outros
+                            </option>
+
+                        </select>
+
+                    </div>
+
+
+                    <div
+                        class="payment-field full"
+                    >
+
+                        <label
+                            class="payment-label"
+                        >
+                            ID/TxID
+                            <span
+                                style="
+                                    font-weight:400;
+                                    color:#777e88
+                                "
+                            >
+                                (opcional)
+                            </span>
+                        </label>
+
+
+                        <input
+                            id="payment-txid"
+                            placeholder="Se houver, informe o código da transação"
+                        >
+
+                    </div>
+
+                </div>
+
+
+                <!-- BOTÕES -->
+
+                <div
+                    class="payment-modal-actions"
+                >
+
+                    <button
+                        type="button"
+                        class="btn"
+                        id="cancel-payment-modal"
+                    >
+                        Cancelar
+                    </button>
+
+
+                    <button
+                        type="submit"
+                        class="btn btn-primary"
+                        id="save-payment"
+                    >
+                        Registrar recebimento
+                    </button>
+
+                </div>
+
+            </form>
+
+        </div>
+
+    `;
+
+
+    /*
+     * FECHAR
+     */
+
+    document
+        .getElementById(
+            'close-payment-modal'
+        )
+        .onclick =
+            closePaymentModal;
+
+
+    document
+        .getElementById(
+            'cancel-payment-modal'
+        )
+        .onclick =
+            closePaymentModal;
+
+
+    document
+        .getElementById(
+            'payment-modal-overlay'
+        )
+        .addEventListener(
+            'click',
+            (event) => {
+
+                if (
+                    event.target.id ===
+                    'payment-modal-overlay'
+                ) {
+
+                    closePaymentModal();
+                }
+            }
+        );
+
+
+    /*
+     * BUSCA CLIENTE
+     */
+
+    const search =
+        document.getElementById(
+            'payment-client-search'
+        );
+
+
+    search.addEventListener(
+        'input',
+        () => {
+
+            if (
+                selectedClient
+            ) {
+
+                selectedClient =
+                    null;
+
+
+                document.getElementById(
+                    'selected-client-area'
+                ).innerHTML = '';
+
+
+                document.getElementById(
+                    'installments-list'
+                ).innerHTML = `
+
+                    <div class="payment-empty">
+                        Selecione novamente um cliente.
+                    </div>
+
+                `;
+
+
+                updateReceiptSummary();
+            }
+
+
+            renderClientResults(
+                search.value
+            );
+        }
+    );
+
+
+    /*
+     * BOTÃO PRÓXIMA PARCELA
+     */
+
+    document
+        .getElementById(
+            'select-next-payment'
+        )
+        .onclick =
+            selectNextInstallment;
+
+
+    /*
+     * BOTÃO TODAS
+     */
+
+    document
+        .getElementById(
+            'select-all-payments'
+        )
+        .onclick =
+            selectAllInstallments;
+
+
+    /*
+     * SUBMIT
+     */
+
+    document
+        .getElementById(
+            'payment-form'
+        )
+        .addEventListener(
+            'submit',
+            savePayment
+        );
+
+
+    /*
+     * Se abriu pelo botão
+     * RECEBER da tabela,
+     * já seleciona o cliente e parcela.
+     */
+
+    if (preferredPartId) {
+
+        const part =
+            openInstallments.find(
+                (item) =>
+                    String(item.id) ===
+                    String(
+                        preferredPartId
+                    )
+            );
+
+
+        if (part) {
+
+            selectClient(
+                getClientKey(part),
+                preferredPartId
+            );
+
+            return;
+        }
+    }
+
+
+    search.focus();
+}
+
+
+/* =====================================================
+   FECHAR MODAL
+===================================================== */
+
+function closePaymentModal() {
+
+    const modal =
+        document.getElementById(
+            'payment-modal'
+        );
+
+
+    if (modal) {
+
+        modal.innerHTML =
+            '';
+    }
+
+
+    selectedClient =
+        null;
+}
+
+
+/* =====================================================
+   BUSCA CLIENTES
+===================================================== */
+
+function renderClientResults(
+    searchValue
+) {
+
+    const results =
+        document.getElementById(
+            'client-results'
+        );
+
+
+    if (!results) {
+        return;
+    }
+
+
+    const search =
+        normalizeText(
+            searchValue
+        );
+
+
+    const searchDigits =
+        digitsOnly(
+            searchValue
+        );
+
+
+    const groups =
+        new Map();
+
+
+    openInstallments.forEach(
+        (part) => {
+
+            const key =
+                getClientKey(part);
+
+
+            if (
+                !groups.has(key)
+            ) {
+
+                groups.set(
+                    key,
+                    {
+                        client:
+                            getClient(part),
+
+                        parts:[]
+                    }
+                );
+            }
+
+
+            groups
+                .get(key)
+                .parts
+                .push(part);
+        }
+    );
+
+
+    let clients =
+        Array.from(
+            groups.entries()
+        );
+
+
+    if (search) {
+
+        clients =
+            clients.filter(
+                ([key, group]) => {
+
+                    const client =
+                        group.client;
+
+
+                    const text =
+                        normalizeText(
+                            [
+                                client.nome,
+                                client.cpf,
+                                client.telefone
+                            ].join(' ')
+                        );
+
+
+                    const digits =
+                        digitsOnly(
+                            [
+                                client.cpf,
+                                client.telefone
+                            ].join(' ')
+                        );
+
+
+                    return (
+                        text.includes(
+                            search
+                        ) ||
+                        (
+                            searchDigits &&
+                            digits.includes(
+                                searchDigits
+                            )
+                        )
+                    );
+                }
+            );
+    }
+
+
+    /*
+     * Sem digitar nada:
+     * mostramos os primeiros clientes.
+     */
+
+    clients =
+        clients.slice(
+            0,
+            10
+        );
+
+
+    if (!clients.length) {
+
         results.innerHTML = `
-            <div class="client-result-empty">
+
+            <div
+                style="
+                    padding:15px;
+                    color:#777e88;
+                    text-align:center
+                "
+            >
                 Nenhum cliente encontrado.
             </div>
+
         `;
+
 
         results.classList.add(
             'visible'
@@ -939,106 +2351,107 @@ function renderClientResults(searchValue) {
 
 
     results.innerHTML =
-        filtered.map((group) => {
+        clients
+            .map(
+                ([key, group]) => {
 
-            const client =
-                group.client;
-
-            const total =
-                group.parts.reduce(
-                    (sum, part) =>
-                        sum +
-                        getPartRemaining(part),
-
-                    0
-                );
+                    const client =
+                        group.client;
 
 
-            return `
+                    const total =
+                        group.parts.reduce(
+                            (sum, part) =>
+                                sum +
+                                getRemaining(part),
 
-                <button
-                    type="button"
-                    class="client-result"
-                    data-client-key="${String(
-                        group.key
-                    ).replace(
-                        /"/g,
-                        '&quot;'
-                    )}"
-                >
+                            0
+                        );
 
-                    <span class="client-result-main">
 
-                        <strong>
-                            ${display(
-                                client.nome ||
-                                'Cliente'
-                            )}
-                        </strong>
+                    return `
 
-                        ${
-                            client.cpf
-                                ? `
-                                    <small>
-                                        CPF/CNPJ:
-                                        ${display(
-                                            client.cpf
-                                        )}
-                                    </small>
-                                `
-                                : ''
-                        }
+                        <button
+                            type="button"
+                            class="client-result-item"
+                            data-client-key="${escapeHTML(key)}"
+                        >
 
-                        ${
-                            client.telefone
-                                ? `
-                                    <small>
-                                        ${display(
-                                            client.telefone
-                                        )}
-                                    </small>
-                                `
-                                : ''
-                        }
+                            <span>
 
-                    </span>
+                                <span
+                                    class="client-result-name"
+                                >
+                                    ${escapeHTML(
+                                        client.nome ||
+                                        'Cliente'
+                                    )}
+                                </span>
 
-                    <span class="client-result-side">
 
-                        <strong>
-                            ${group.parts.length}
-                            ${
-                                group.parts.length === 1
-                                    ? 'parcela'
-                                    : 'parcelas'
-                            }
-                        </strong>
+                                <span
+                                    class="client-result-info"
+                                >
 
-                        <small>
-                            ${fmtMoney(total)}
-                        </small>
+                                    ${
+                                        client.cpf
+                                            ? `CPF/CNPJ: ${escapeHTML(client.cpf)}`
+                                            : ''
+                                    }
 
-                    </span>
+                                    ${
+                                        client.telefone
+                                            ? ` • ${escapeHTML(client.telefone)}`
+                                            : ''
+                                    }
 
-                </button>
+                                </span>
 
-            `;
+                            </span>
 
-        }).join('');
+
+                            <span
+                                class="client-result-total"
+                            >
+
+                                <small>
+                                    ${group.parts.length}
+                                    ${
+                                        group.parts.length === 1
+                                            ? 'parcela'
+                                            : 'parcelas'
+                                    }
+                                </small>
+
+                                <strong>
+                                    ${money(total)}
+                                </strong>
+
+                            </span>
+
+                        </button>
+
+                    `;
+                }
+            )
+            .join('');
 
 
     results
         .querySelectorAll(
-            '.client-result'
+            '.client-result-item'
         )
         .forEach((button) => {
 
-            button.onclick = () => {
+            button.addEventListener(
+                'click',
+                () => {
 
-                selectPaymentClient(
-                    button.dataset.clientKey
-                );
-            };
+                    selectClient(
+                        button.dataset.clientKey
+                    );
+                }
+            );
         });
 
 
@@ -1048,94 +2461,59 @@ function renderClientResults(searchValue) {
 }
 
 
-function clearPaymentClient() {
+/* =====================================================
+   SELECIONA CLIENTE
+===================================================== */
 
-    selectedPaymentClient =
-        null;
-
-    selectedPaymentParts =
-        [];
-
-
-    const selectedBox =
-        document.getElementById(
-            'selected-client'
-        );
-
-    if (selectedBox) {
-
-        selectedBox.innerHTML = `
-            <div class="selected-client-placeholder">
-                Selecione um cliente para
-                visualizar as parcelas.
-            </div>
-        `;
-    }
-
-
-    const list =
-        document.getElementById(
-            'installment-list'
-        );
-
-    if (list) {
-
-        list.innerHTML = `
-            <div class="installment-empty">
-                Primeiro selecione um cliente.
-            </div>
-        `;
-    }
-
-
-    const formGrid =
-        document.getElementById(
-            'payment-form-grid'
-        );
-
-    if (formGrid) {
-
-        formGrid.classList.add(
-            'hidden'
-        );
-    }
-
-
-    updateReceiptSummary();
-
-
-    const results =
-        document.getElementById(
-            'client-results'
-        );
-
-    if (results) {
-
-        results.classList.remove(
-            'visible'
-        );
-    }
-}
-
-
-function selectPaymentClient(
+function selectClient(
     clientKey,
     preferredPartId = null
 ) {
 
+    const groups =
+        new Map();
+
+
+    openInstallments.forEach(
+        (part) => {
+
+            const key =
+                getClientKey(part);
+
+
+            if (
+                !groups.has(key)
+            ) {
+
+                groups.set(
+                    key,
+                    {
+                        client:
+                            getClient(part),
+
+                        parts:[]
+                    }
+                );
+            }
+
+
+            groups
+                .get(key)
+                .parts
+                .push(part);
+        }
+    );
+
+
     const group =
-        groupOpenPartsByClient(
-            openInstallments
-        ).find(
-            (item) =>
-                String(item.key) ===
-                String(clientKey)
+        groups.get(
+            String(clientKey)
         );
 
 
     if (!group) {
 
-        toast(
+        notify(
             'Cliente não encontrado.',
             'error'
         );
@@ -1144,31 +2522,19 @@ function selectPaymentClient(
     }
 
 
-    selectedPaymentClient =
+    selectedClient =
         group;
 
 
-    selectedPaymentParts =
-        [];
-
-
-    const search =
-        document.getElementById(
-            'payment-client-search'
-        );
-
-    if (search) {
-
-        search.value =
-            group.client.nome ||
-            '';
-    }
-
+    /*
+     * Fecha busca
+     */
 
     const results =
         document.getElementById(
             'client-results'
         );
+
 
     if (results) {
 
@@ -1178,10 +2544,168 @@ function selectPaymentClient(
     }
 
 
-    renderSelectedClient();
+    /*
+     * Preenche cliente
+     */
+
+    const area =
+        document.getElementById(
+            'selected-client-area'
+        );
 
 
-    renderPaymentInstallments(
+    const total =
+        group.parts.reduce(
+            (sum, part) =>
+                sum +
+                getRemaining(part),
+
+            0
+        );
+
+
+    area.innerHTML = `
+
+        <div
+            class="selected-client-card"
+        >
+
+            <div
+                class="selected-client-info"
+            >
+
+                <span
+                    style="
+                        display:block;
+                        font-size:10px;
+                        color:#777e88;
+                        margin-bottom:3px
+                    "
+                >
+                    CLIENTE SELECIONADO
+                </span>
+
+                <strong>
+                    ${escapeHTML(
+                        group.client.nome ||
+                        'Cliente'
+                    )}
+                </strong>
+
+
+                ${
+                    group.client.cpf
+                        ? `
+                            <small>
+                                CPF/CNPJ:
+                                ${escapeHTML(
+                                    group.client.cpf
+                                )}
+                            </small>
+                        `
+                        : ''
+                }
+
+
+                ${
+                    group.client.telefone
+                        ? `
+                            <small>
+                                ${escapeHTML(
+                                    group.client.telefone
+                                )}
+                            </small>
+                        `
+                        : ''
+                }
+
+            </div>
+
+
+            <div
+                class="selected-client-debt"
+            >
+
+                <span>
+                    ${
+                        group.parts.length
+                    }
+
+                    ${
+                        group.parts.length === 1
+                            ? 'parcela'
+                            : 'parcelas'
+                    }
+
+                    em aberto
+                </span>
+
+
+                <strong>
+                    ${money(total)}
+                </strong>
+
+            </div>
+
+
+            <button
+                type="button"
+                class="change-client-btn"
+                id="change-payment-client"
+                title="Trocar cliente"
+            >
+                ×
+            </button>
+
+        </div>
+
+    `;
+
+
+    document
+        .getElementById(
+            'change-payment-client'
+        )
+        .onclick =
+            () => {
+
+                selectedClient =
+                    null;
+
+
+                area.innerHTML =
+                    '';
+
+
+                document.getElementById(
+                    'installments-list'
+                ).innerHTML = `
+
+                    <div class="payment-empty">
+                        Primeiro selecione um cliente.
+                    </div>
+
+                `;
+
+
+                updateReceiptSummary();
+
+
+                const input =
+                    document.getElementById(
+                        'payment-client-search'
+                    );
+
+
+                input.value =
+                    '';
+
+
+                input.focus();
+            };
+
+
+    renderClientInstallments(
         preferredPartId
     );
 
@@ -1190,161 +2714,37 @@ function selectPaymentClient(
 }
 
 
-function renderSelectedClient() {
+/* =====================================================
+   PARCELAS DO CLIENTE
+===================================================== */
 
-    const box =
-        document.getElementById(
-            'selected-client'
-        );
-
-    if (!box ||
-        !selectedPaymentClient
-    ) {
-        return;
-    }
-
-
-    const client =
-        selectedPaymentClient.client;
-
-    const parts =
-        selectedPaymentClient.parts;
-
-
-    const total =
-        parts.reduce(
-            (sum, part) =>
-                sum +
-                getPartRemaining(part),
-
-            0
-        );
-
-
-    box.innerHTML = `
-
-        <div class="selected-client-card">
-
-            <div class="selected-client-info">
-
-                <span class="selected-client-label">
-                    CLIENTE SELECIONADO
-                </span>
-
-                <strong>
-                    ${display(
-                        client.nome ||
-                        'Cliente'
-                    )}
-                </strong>
-
-                <div class="selected-client-meta">
-
-                    ${
-                        client.cpf
-                            ? `
-                                <span>
-                                    CPF/CNPJ:
-                                    ${display(
-                                        client.cpf
-                                    )}
-                                </span>
-                            `
-                            : ''
-                    }
-
-                    ${
-                        client.telefone
-                            ? `
-                                <span>
-                                    ${display(
-                                        client.telefone
-                                    )}
-                                </span>
-                            `
-                            : ''
-                    }
-
-                </div>
-
-            </div>
-
-            <div class="selected-client-debt">
-
-                <span>
-                    ${parts.length}
-                    ${
-                        parts.length === 1
-                            ? 'parcela'
-                            : 'parcelas'
-                    }
-                    em aberto
-                </span>
-
-                <strong>
-                    ${fmtMoney(total)}
-                </strong>
-
-            </div>
-
-            <button
-                type="button"
-                class="icon-btn change-client"
-                title="Trocar cliente"
-            >
-                ×
-            </button>
-
-        </div>
-    `;
-
-
-    box
-        .querySelector(
-            '.change-client'
-        )
-        ?.addEventListener(
-            'click',
-            () => {
-
-                clearPaymentClient();
-
-                const input =
-                    document.getElementById(
-                        'payment-client-search'
-                    );
-
-                input?.focus();
-            }
-        );
-}
-
-
-function renderPaymentInstallments(
+function renderClientInstallments(
     preferredPartId = null
 ) {
 
     const list =
         document.getElementById(
-            'installment-list'
+            'installments-list'
         );
 
-    if (!list ||
-        !selectedPaymentClient
+
+    if (
+        !list ||
+        !selectedClient
     ) {
         return;
     }
 
 
     const parts =
-        [...selectedPaymentClient.parts]
+        [...selectedClient.parts]
             .sort(
                 (a, b) =>
                     String(
-                        a.vencimento || ''
+                        a.vencimento
                     ).localeCompare(
                         String(
-                            b.vencimento || ''
+                            b.vencimento
                         )
                     )
             );
@@ -1353,10 +2753,11 @@ function renderPaymentInstallments(
     if (!parts.length) {
 
         list.innerHTML = `
-            <div class="installment-empty">
-                Este cliente não possui
-                parcelas em aberto.
+
+            <div class="payment-empty">
+                Nenhuma parcela em aberto.
             </div>
+
         `;
 
         return;
@@ -1364,119 +2765,135 @@ function renderPaymentInstallments(
 
 
     list.innerHTML =
-        parts.map((part) => {
+        parts
+            .map(
+                (part) => {
 
-            const remaining =
-                getPartRemaining(part);
-
-            const status =
-                openPartStatus(part);
-
-            const checked =
-                preferredPartId &&
-                String(
-                    preferredPartId
-                ) ===
-                String(part.id);
+                    const status =
+                        getStatus(part);
 
 
-            return `
+                    const remaining =
+                        getRemaining(part);
 
-                <div
-                    class="installment-row ${checked ? 'selected' : ''}"
-                    data-part-id="${part.id}"
-                >
 
-                    <label
-                        class="installment-check"
-                    >
+                    const selected =
+                        preferredPartId &&
+                        String(
+                            preferredPartId
+                        ) ===
+                        String(part.id);
 
-                        <input
-                            type="checkbox"
-                            class="payment-part-checkbox"
+
+                    return `
+
+                        <div
+                            class="installment-item ${
+                                selected
+                                    ? 'selected'
+                                    : ''
+                            }"
                             data-part-id="${part.id}"
-                            ${checked ? 'checked' : ''}
                         >
 
-                        <span class="custom-check"></span>
+                            <div>
 
-                    </label>
+                                <input
+                                    type="checkbox"
+                                    class="installment-checkbox"
+                                    data-part-id="${part.id}"
+                                    ${
+                                        selected
+                                            ? 'checked'
+                                            : ''
+                                    }
+                                >
+
+                            </div>
 
 
-                    <div class="installment-main">
+                            <div>
 
-                        <div class="installment-title">
+                                <strong
+                                    class="installment-number"
+                                >
+                                    Parcela ${escapeHTML(
+                                        part.numero
+                                    )}
+                                </strong>
 
-                            <strong>
-                                Parcela ${part.numero}
-                            </strong>
 
-                            <span
-                                class="open-status ${status.className}"
+                                <span
+                                    class="installment-meta"
+                                >
+                                    Vencimento:
+                                    ${dateFormat(
+                                        part.vencimento
+                                    )}
+
+                                    •
+
+                                    <span
+                                        class="${status.className}"
+                                    >
+                                        ${status.label}
+                                    </span>
+                                </span>
+
+                            </div>
+
+
+                            <div
+                                class="installment-value"
                             >
-                                ${status.label}
-                            </span>
+
+                                <small>
+                                    Restante
+                                </small>
+
+                                <strong>
+                                    ${money(
+                                        remaining
+                                    )}
+                                </strong>
+
+                            </div>
+
+
+                            <div>
+
+                                <input
+                                    type="number"
+                                    class="installment-receive"
+                                    data-part-id="${part.id}"
+                                    value="${remaining.toFixed(2)}"
+                                    min="0.01"
+                                    max="${remaining.toFixed(2)}"
+                                    step="0.01"
+                                    ${
+                                        selected
+                                            ? ''
+                                            : 'disabled'
+                                    }
+                                >
+
+                            </div>
 
                         </div>
 
-                        <span class="installment-date">
-                            Vencimento:
-                            ${dateBR(
-                                part.vencimento
-                            )}
-                        </span>
-
-                    </div>
+                    `;
+                }
+            )
+            .join('');
 
 
-                    <div class="installment-value">
-
-                        <span>
-                            Restante
-                        </span>
-
-                        <strong>
-                            ${fmtMoney(
-                                remaining
-                            )}
-                        </strong>
-
-                    </div>
-
-
-                    <div class="installment-payment-value">
-
-                        <label>
-                            Receber
-                        </label>
-
-                        <input
-                            type="number"
-                            class="payment-part-value"
-                            data-part-id="${part.id}"
-                            value="${
-                                checked
-                                    ? remaining.toFixed(2)
-                                    : remaining.toFixed(2)
-                            }"
-                            min="0.01"
-                            max="${remaining.toFixed(2)}"
-                            step="0.01"
-                            ${checked ? '' : 'disabled'}
-                        >
-
-                    </div>
-
-                </div>
-
-            `;
-
-        }).join('');
-
+    /*
+     * CHECKBOXES
+     */
 
     list
         .querySelectorAll(
-            '.payment-part-checkbox'
+            '.installment-checkbox'
         )
         .forEach((checkbox) => {
 
@@ -1486,20 +2903,24 @@ function renderPaymentInstallments(
 
                     const row =
                         checkbox.closest(
-                            '.installment-row'
+                            '.installment-item'
                         );
+
 
                     const valueInput =
                         row.querySelector(
-                            '.payment-part-value'
+                            '.installment-receive'
                         );
 
 
-                    if (checkbox.checked) {
+                    if (
+                        checkbox.checked
+                    ) {
 
                         row.classList.add(
                             'selected'
                         );
+
 
                         valueInput.disabled =
                             false;
@@ -1509,6 +2930,7 @@ function renderPaymentInstallments(
                         row.classList.remove(
                             'selected'
                         );
+
 
                         valueInput.disabled =
                             true;
@@ -1521,9 +2943,13 @@ function renderPaymentInstallments(
         });
 
 
+    /*
+     * VALORES
+     */
+
     list
         .querySelectorAll(
-            '.payment-part-value'
+            '.installment-receive'
         )
         .forEach((input) => {
 
@@ -1538,19 +2964,160 @@ function renderPaymentInstallments(
 }
 
 
-function getSelectedInstallments() {
+/* =====================================================
+   PRÓXIMA PARCELA
+===================================================== */
+
+function selectNextInstallment() {
+
+    if (
+        !selectedClient
+    ) {
+
+        notify(
+            'Primeiro selecione um cliente.',
+            'error'
+        );
+
+        return;
+    }
+
 
     const list =
         document.getElementById(
-            'installment-list'
+            'installments-list'
         );
 
-    if (!list) return [];
+
+    const checkbox =
+        list?.querySelector(
+            '.installment-checkbox:not(:checked)'
+        );
+
+
+    if (!checkbox) {
+
+        notify(
+            'Todas as parcelas já estão selecionadas.'
+        );
+
+        return;
+    }
+
+
+    checkbox.checked =
+        true;
+
+
+    const row =
+        checkbox.closest(
+            '.installment-item'
+        );
+
+
+    row.classList.add(
+        'selected'
+    );
+
+
+    const valueInput =
+        row.querySelector(
+            '.installment-receive'
+        );
+
+
+    valueInput.disabled =
+        false;
+
+
+    updateReceiptSummary();
+}
+
+
+/* =====================================================
+   SELECIONAR TODAS
+===================================================== */
+
+function selectAllInstallments() {
+
+    if (
+        !selectedClient
+    ) {
+
+        notify(
+            'Primeiro selecione um cliente.',
+            'error'
+        );
+
+        return;
+    }
+
+
+    const list =
+        document.getElementById(
+            'installments-list'
+        );
+
+
+    list
+        .querySelectorAll(
+            '.installment-checkbox'
+        )
+        .forEach((checkbox) => {
+
+            checkbox.checked =
+                true;
+
+
+            const row =
+                checkbox.closest(
+                    '.installment-item'
+                );
+
+
+            row.classList.add(
+                'selected'
+            );
+
+
+            const input =
+                row.querySelector(
+                    '.installment-receive'
+                );
+
+
+            input.disabled =
+                false;
+        });
+
+
+    updateReceiptSummary();
+}
+
+
+/* =====================================================
+   OBTÉM PARCELAS SELECIONADAS
+===================================================== */
+
+function getSelectedPayments() {
+
+    const list =
+        document.getElementById(
+            'installments-list'
+        );
+
+
+    if (
+        !list ||
+        !selectedClient
+    ) {
+        return [];
+    }
 
 
     return Array.from(
         list.querySelectorAll(
-            '.payment-part-checkbox:checked'
+            '.installment-checkbox:checked'
         )
     )
         .map((checkbox) => {
@@ -1558,29 +3125,29 @@ function getSelectedInstallments() {
             const partId =
                 checkbox.dataset.partId;
 
+
             const part =
-                selectedPaymentClient.parts.find(
+                selectedClient.parts.find(
                     (item) =>
                         String(item.id) ===
                         String(partId)
                 );
 
 
-            const valueInput =
+            const input =
                 list.querySelector(
-                    `.payment-part-value[data-part-id="${partId}"]`
-                );
-
-
-            const amount =
-                Number(
-                    valueInput?.value || 0
+                    `.installment-receive[data-part-id="${partId}"]`
                 );
 
 
             return {
+
                 part,
-                amount
+
+                amount:
+                    Number(
+                        input?.value || 0
+                    )
             };
 
         })
@@ -1591,26 +3158,31 @@ function getSelectedInstallments() {
 }
 
 
+/* =====================================================
+   ATUALIZA RESUMO
+===================================================== */
+
 function updateReceiptSummary() {
 
     const selected =
-        getSelectedInstallments();
+        getSelectedPayments();
 
 
     const count =
         document.getElementById(
-            'receipt-count'
+            'selected-count'
         );
+
 
     const total =
         document.getElementById(
-            'receipt-total'
+            'selected-total'
         );
 
 
-    const formGrid =
+    const extra =
         document.getElementById(
-            'payment-form-grid'
+            'payment-extra-fields'
         );
 
 
@@ -1636,926 +3208,852 @@ function updateReceiptSummary() {
     if (total) {
 
         total.textContent =
-            fmtMoney(
+            money(
                 totalValue
             );
     }
 
 
-    if (formGrid) {
+    if (extra) {
+
+        extra.style.display =
+            selected.length
+                ? 'grid'
+                : 'none';
+    }
+}
+
+
+/* =====================================================
+   SALVAR RECEBIMENTO
+===================================================== */
+
+async function savePayment(
+    event
+) {
+
+    event.preventDefault();
+
+
+    try {
 
         if (
-            selected.length > 0
+            !selectedClient
         ) {
 
-            formGrid.classList.remove(
-                'hidden'
+            throw new Error(
+                'Selecione um cliente.'
+            );
+        }
+
+
+        const selected =
+            getSelectedPayments();
+
+
+        if (!selected.length) {
+
+            throw new Error(
+                'Selecione pelo menos uma parcela.'
+            );
+        }
+
+
+        const dataPagamento =
+            document.getElementById(
+                'payment-date'
+            ).value;
+
+
+        const formaPagamento =
+            document.getElementById(
+                'payment-method'
+            ).value;
+
+
+        const txid =
+            document.getElementById(
+                'payment-txid'
+            ).value
+            .trim();
+
+
+        if (!dataPagamento) {
+
+            throw new Error(
+                'Informe a data do recebimento.'
+            );
+        }
+
+
+        /*
+         * VALIDA VALORES
+         */
+
+        for (
+            const item of selected
+        ) {
+
+            const remaining =
+                getRemaining(
+                    item.part
+                );
+
+
+            if (
+                item.amount <= 0
+            ) {
+
+                throw new Error(
+                    `Informe um valor válido para a parcela ${item.part.numero}.`
+                );
+            }
+
+
+            if (
+                item.amount >
+                remaining + 0.01
+            ) {
+
+                throw new Error(
+                    `O valor máximo da parcela ${item.part.numero} é ${money(remaining)}.`
+                );
+            }
+        }
+
+
+        const button =
+            document.getElementById(
+                'save-payment'
             );
 
-        } else {
 
-            formGrid.classList.add(
-                'hidden'
+        if (button) {
+
+            button.disabled =
+                true;
+
+            button.textContent =
+                'Registrando...';
+        }
+
+
+        /*
+         * PROCESSA CADA PARCELA
+         */
+
+        for (
+            const item of selected
+        ) {
+
+            const partId =
+                item.part.id;
+
+
+            const value =
+                Number(
+                    item.amount.toFixed(2)
+                );
+
+
+            /*
+             * Busca a parcela novamente
+             * para evitar conflito com
+             * dados antigos da tela.
+             */
+
+            const parcela =
+                await supabaseQuery(
+                    (c) =>
+                        c
+                            .from('parcelas')
+                            .select(
+                                'id,valor,valor_pago,status'
+                            )
+                            .eq(
+                                'id',
+                                partId
+                            )
+                            .single()
+                );
+
+
+            if (!parcela) {
+
+                throw new Error(
+                    `Parcela ${item.part.numero} não encontrada.`
+                );
+            }
+
+
+            const valorParcela =
+                Number(
+                    parcela.valor || 0
+                );
+
+
+            const valorJaPago =
+                Number(
+                    parcela.valor_pago || 0
+                );
+
+
+            const valorRestante =
+                Math.max(
+                    0,
+                    valorParcela -
+                    valorJaPago
+                );
+
+
+            if (
+                value >
+                valorRestante + 0.01
+            ) {
+
+                throw new Error(
+                    `A parcela ${item.part.numero} foi alterada. O máximo agora é ${money(valorRestante)}.`
+                );
+            }
+
+
+            /*
+             * REGISTRA PAGAMENTO
+             */
+
+            await supabaseQuery(
+                (c) =>
+                    c
+                        .from('pagamentos')
+                        .insert({
+
+                            parcela_id:
+                                partId,
+
+                            valor:
+                                value,
+
+                            data_pagamento:
+                                dataPagamento,
+
+                            forma_pagamento:
+                                formaPagamento,
+
+                            id_transacao:
+                                txid ||
+                                null,
+
+                            status:
+                                'confirmado'
+                        })
             );
+
+
+            /*
+             * ATUALIZA PARCELA
+             */
+
+            const novoTotalPago =
+                valorJaPago +
+                value;
+
+
+            const novaStatus =
+                novoTotalPago >=
+                valorParcela
+                    ? 'paga'
+                    : 'pendente';
+
+
+            await supabaseQuery(
+                (c) =>
+                    c
+                        .from('parcelas')
+                        .update({
+
+                            status:
+                                novaStatus,
+
+                            valor_pago:
+                                novoTotalPago,
+
+                            data_pagamento:
+                                novaStatus ===
+                                'paga'
+                                    ? dataPagamento
+                                    : null
+
+                        })
+                        .eq(
+                            'id',
+                            partId
+                        )
+            );
+        }
+
+
+        /*
+         * FECHA
+         */
+
+        closePaymentModal();
+
+
+        const total =
+            selected.reduce(
+                (sum, item) =>
+                    sum +
+                    item.amount,
+
+                0
+            );
+
+
+        notify(
+            selected.length === 1
+
+                ? 'Recebimento registrado com sucesso.'
+
+                : `${selected.length} parcelas recebidas. Total: ${money(total)}.`
+        );
+
+
+        /*
+         * ATUALIZA TUDO
+         */
+
+        await Promise.all([
+
+            loadPayments(),
+
+            loadOpenInstallments()
+
+        ]);
+
+    } catch (error) {
+
+        console.error(
+            'Erro ao registrar:',
+            error
+        );
+
+
+        notify(
+            error.message ||
+            'Erro ao registrar recebimento.',
+            'error'
+        );
+
+
+        const button =
+            document.getElementById(
+                'save-payment'
+            );
+
+
+        if (button) {
+
+            button.disabled =
+                false;
+
+            button.textContent =
+                'Registrar recebimento';
         }
     }
 }
 
 
-function selectAllPaymentParts() {
+/* =====================================================
+   HISTÓRICO DE PAGAMENTOS
+===================================================== */
 
-    const list =
+async function loadPayments() {
+
+    const table =
         document.getElementById(
-            'installment-list'
+            'payments-table'
         );
 
-    if (!list) return;
+
+    if (!table) {
+        return;
+    }
 
 
-    list
-        .querySelectorAll(
-            '.payment-part-checkbox'
-        )
-        .forEach((checkbox) => {
+    try {
 
-            checkbox.checked =
-                true;
+        const rows =
+            await supabaseQuery(
+                (c) =>
+                    c
+                        .from('pagamentos')
+                        .select(`
+                            *,
+                            parcelas(
+                                numero,
+                                vencimento,
+                                valor,
+                                valor_pago,
+                                vendas(
+                                    descricao,
+                                    clientes(nome)
+                                )
+                            )
+                        `)
+                        .order(
+                            'data_pagamento',
+                            {
+                                ascending:false
+                            }
+                        )
+            ) || [];
 
-            const row =
-                checkbox.closest(
-                    '.installment-row'
-                );
 
-            const valueInput =
-                row.querySelector(
-                    '.payment-part-value'
-                );
+        table.innerHTML =
 
-            row.classList.add(
-                'selected'
-            );
+            rows
+                .map(
+                    (p) => `
 
-            valueInput.disabled =
-                false;
-        });
+                        <tr>
+
+                            <td>
+                                ${escapeHTML(
+                                    p.parcelas
+                                        ?.vendas
+                                        ?.clientes
+                                        ?.nome ||
+                                    '—'
+                                )}
+                            </td>
 
 
-    updateReceiptSummary();
+                            <td>
+                                ${
+                                    p.parcelas
+                                        ?.numero ||
+                                    '—'
+                                }
+                            </td>
+
+
+                            <td>
+                                ${money(
+                                    p.valor
+                                )}
+                            </td>
+
+
+                            <td>
+                                ${dateFormat(
+                                    p.data_pagamento
+                                )}
+                            </td>
+
+
+                            <td>
+                                ${escapeHTML(
+                                    p.forma_pagamento ||
+                                    '—'
+                                )}
+                            </td>
+
+
+                            <td>
+                                ${escapeHTML(
+                                    p.txid ||
+                                    p.id_transacao ||
+                                    '—'
+                                )}
+                            </td>
+
+
+                            <td>
+
+                                ${
+                                    typeof statusHTML ===
+                                    'function'
+
+                                        ? statusHTML(
+                                            'paga',
+                                            p.status ||
+                                            'Confirmado'
+                                        )
+
+                                        : `
+                                            <span>
+                                                Confirmado
+                                            </span>
+                                        `
+                                }
+
+                            </td>
+
+
+                            <td>
+
+                                <button
+                                    type="button"
+                                    class="btn btn-danger delete-payment"
+                                    data-id="${p.id}"
+                                >
+                                    Excluir
+                                </button>
+
+                            </td>
+
+                        </tr>
+
+                    `
+                )
+                .join('')
+
+
+            ||
+
+            `
+
+                <tr>
+
+                    <td
+                        colspan="8"
+                        class="empty"
+                    >
+                        Nenhum pagamento registrado.
+                    </td>
+
+                </tr>
+
+            `;
+
+
+        /*
+         * EXCLUSÃO
+         */
+
+        table
+            .querySelectorAll(
+                '.delete-payment'
+            )
+            .forEach((button) => {
+
+                button.onclick =
+                    () =>
+                        deletePayment(
+                            button.dataset.id
+                        );
+            });
+
+
+    } catch (error) {
+
+        console.error(
+            'Erro no histórico:',
+            error
+        );
+
+
+        table.innerHTML = `
+
+            <tr>
+
+                <td
+                    colspan="8"
+                    class="empty"
+                >
+                    Não foi possível carregar
+                    o histórico de pagamentos.
+                </td>
+
+            </tr>
+
+        `;
+    }
 }
 
 
-function selectNextPaymentPart() {
+/* =====================================================
+   EXCLUI PAGAMENTO
+===================================================== */
 
-    const list =
-        document.getElementById(
-            'installment-list'
-        );
+async function deletePayment(
+    paymentId
+) {
 
-    if (!list ||
-        !selectedPaymentClient
+    if (
+        !confirm(
+            'Excluir este recebimento do histórico?'
+        )
     ) {
         return;
     }
 
 
-    const checkbox =
-        list.querySelector(
-            '.payment-part-checkbox:not(:checked)'
-        );
-
-
-    if (!checkbox) {
-
-        toast(
-            'Todas as parcelas já estão selecionadas.'
-        );
-
-        return;
-    }
-
-
-    checkbox.checked =
-        true;
-
-
-    const row =
-        checkbox.closest(
-            '.installment-row'
-        );
-
-
-    const valueInput =
-        row.querySelector(
-            '.payment-part-value'
-        );
-
-
-    row.classList.add(
-        'selected'
-    );
-
-    valueInput.disabled =
-        false;
-
-
-    updateReceiptSummary();
-}
-
-
-async function openPaymentModal(
-    options = {}
-) {
-
     try {
 
-        if (!openInstallments.length) {
-
-            await loadOpenInstallments();
-        }
-
-
-        document.getElementById(
-            'payment-modal'
-        ).innerHTML = `
-
-            <div class="modal">
-
-                <form
-                    class="modal-card payment-modal-card"
-                    id="payment-form"
-                >
-
-                    <div class="modal-head">
-
-                        <div>
-
-                            <span class="eyebrow">
-                                BAIXA FINANCEIRA
-                            </span>
-
-                            <h3>
-                                Registrar recebimento
-                            </h3>
-
-                        </div>
-
-
-                        <button
-                            type="button"
-                            class="icon-btn close-payment"
-                        >
-                            ×
-                        </button>
-
-                    </div>
-
-
-                    <div class="payment-client-section">
-
-                        <label
-                            class="payment-section-label"
-                        >
-                            Cliente
-                        </label>
-
-
-                        <div class="client-search-wrap">
-
-                            <span
-                                class="client-search-icon"
-                            >
-                                🔍
-                            </span>
-
-                            <input
-                                id="payment-client-search"
-                                type="text"
-                                autocomplete="off"
-                                placeholder="Digite nome, CPF ou telefone..."
-                            >
-
-                        </div>
-
-
-                        <div
-                            id="client-results"
-                            class="client-results"
-                        ></div>
-
-
-                        <div
-                            id="selected-client"
-                            class="selected-client-container"
-                        ></div>
-
-                    </div>
-
-
-                    <div class="payment-installments-section">
-
-                        <div class="payment-section-head">
-
-                            <div>
-
-                                <label
-                                    class="payment-section-label"
-                                >
-                                    Parcelas em aberto
-                                </label>
-
-                                <span
-                                    class="payment-section-help"
-                                >
-                                    Selecione uma ou várias
-                                    parcelas para receber.
-                                </span>
-
-                            </div>
-
-
-                            <div class="installment-actions">
-
-                                <button
-                                    type="button"
-                                    class="installment-action"
-                                    id="select-next-part"
-                                >
-                                    Próxima parcela
-                                </button>
-
-                                <button
-                                    type="button"
-                                    class="installment-action"
-                                    id="select-all-parts"
-                                >
-                                    Selecionar todas
-                                </button>
-
-                            </div>
-
-                        </div>
-
-
-                        <div
-                            id="installment-list"
-                            class="installment-list"
-                        ></div>
-
-                    </div>
-
-
-                    <div
-                        id="receipt-summary"
-                        class="receipt-summary"
-                    >
-
-                        <div class="receipt-summary-card">
-
-                            <span>
-                                Parcelas selecionadas
-                            </span>
-
-                            <strong id="receipt-count">
-                                0
-                            </strong>
-
-                        </div>
-
-
-                        <div class="receipt-summary-card">
-
-                            <span>
-                                Total do recebimento
-                            </span>
-
-                            <strong id="receipt-total">
-                                R$ 0,00
-                            </strong>
-
-                        </div>
-
-                    </div>
-
-
-                    <div
-                        id="payment-form-grid"
-                        class="form-grid payment-form-grid hidden"
-                    >
-
-                        <div class="field">
-
-                            <label>
-                                Data do recebimento *
-                            </label>
-
-                            <input
-                                id="payment-date"
-                                type="date"
-                                value="${todayISO()}"
-                                required
-                            >
-
-                        </div>
-
-
-                        <div class="field">
-
-                            <label>
-                                Forma de pagamento
-                            </label>
-
-                            <select
-                                id="payment-method"
-                            >
-
-                                <option value="dinheiro">
-                                    Dinheiro
-                                </option>
-
-                                <option value="pix">
-                                    PIX
-                                </option>
-
-                                <option value="cartao">
-                                    Cartão
-                                </option>
-
-                                <option value="outros">
-                                    Outros
-                                </option>
-
-                            </select>
-
-                        </div>
-
-
-                        <div class="field full">
-
-                            <label>
-                                ID/TxID
-                                <span
-                                    style="font-weight:400;color:#777e88"
-                                >
-                                    (opcional)
-                                </span>
-                            </label>
-
-                            <input
-                                id="payment-txid"
-                                placeholder="Se houver, informe o código da transação"
-                            >
-
-                        </div>
-
-                    </div>
-
-
-                    <div
-                        style="
-                            display:flex;
-                            justify-content:flex-end;
-                            gap:8px;
-                            margin-top:22px
-                        "
-                    >
-
-                        <button
-                            type="button"
-                            class="btn close-payment"
-                        >
-                            Cancelar
-                        </button>
-
-
-                        <button
-                            class="btn btn-primary"
-                            type="submit"
-                        >
-                            Registrar recebimento
-                        </button>
-
-                    </div>
-
-                </form>
-
-            </div>
-        `;
-
-
-        document
-            .querySelectorAll(
-                '.close-payment'
-            )
-            .forEach((button) => {
-
-                button.onclick = () => {
-
-                    document.getElementById(
-                        'payment-modal'
-                    ).innerHTML = '';
-                };
-            });
-
-
-        const clientInput =
-            document.getElementById(
-                'payment-client-search'
+        /*
+         * Descobre parcela
+         */
+
+        const pagamento =
+            await supabaseQuery(
+                (c) =>
+                    c
+                        .from('pagamentos')
+                        .select(
+                            'id,parcela_id'
+                        )
+                        .eq(
+                            'id',
+                            paymentId
+                        )
+                        .single()
             );
 
 
-        clientInput.oninput =
-            () => {
-
-                if (
-                    selectedPaymentClient
-                ) {
-
-                    clearPaymentClient();
-                }
-
-                renderClientResults(
-                    clientInput.value
-                );
-            };
-
-
-        clientInput.onfocus =
-            () => {
-
-                if (
-                    clientInput.value &&
-                    !selectedPaymentClient
-                ) {
-
-                    renderClientResults(
-                        clientInput.value
-                    );
-                }
-            };
-
-
-        document.getElementById(
-            'select-all-parts'
-        ).onclick =
-            selectAllPaymentParts;
-
-
-        document.getElementById(
-            'select-next-part'
-        ).onclick =
-            selectNextPaymentPart;
-
-
-        document.getElementById(
-            'payment-form'
-        ).onsubmit =
-            async (event) => {
-
-                event.preventDefault();
-
-
-                try {
-
-                    if (
-                        !selectedPaymentClient
-                    ) {
-
-                        throw new Error(
-                            'Selecione um cliente.'
-                        );
-                    }
-
-
-                    const selected =
-                        getSelectedInstallments();
-
-
-                    if (!selected.length) {
-
-                        throw new Error(
-                            'Selecione pelo menos uma parcela.'
-                        );
-                    }
-
-
-                    for (
-                        const item of selected
-                    ) {
-
-                        const remaining =
-                            getPartRemaining(
-                                item.part
-                            );
-
-
-                        if (
-                            item.amount <= 0
-                        ) {
-
-                            throw new Error(
-                                `Informe um valor válido para a parcela ${item.part.numero}.`
-                            );
-                        }
-
-
-                        if (
-                            item.amount >
-                            remaining + 0.01
-                        ) {
-
-                            throw new Error(
-                                `O valor máximo da parcela ${item.part.numero} é ${fmtMoney(remaining)}.`
-                            );
-                        }
-                    }
-
-
-                    const dataPagamento =
-                        document.getElementById(
-                            'payment-date'
-                        ).value;
-
-
-                    const formaPagamento =
-                        document.getElementById(
-                            'payment-method'
-                        ).value;
-
-
-                    const txid =
-                        document.getElementById(
-                            'payment-txid'
-                        ).value.trim();
-
-
-                    const submitButton =
-                        event.currentTarget.querySelector(
-                            'button[type="submit"]'
-                        );
-
-
-                    if (submitButton) {
-
-                        submitButton.disabled =
-                            true;
-
-                        submitButton.textContent =
-                            'Registrando...';
-                    }
-
-
-                    for (
-                        const item of selected
-                    ) {
-
-                        const partId =
-                            item.part.id;
-
-
-                        const value =
-                            Number(
-                                item.amount.toFixed(
-                                    2
-                                )
-                            );
-
-
-                        const parcela =
-                            await supabaseQuery(
-                                (c) =>
-                                    c
-                                        .from(
-                                            'parcelas'
-                                        )
-                                        .select(
-                                            'id,valor,valor_pago'
-                                        )
-                                        .eq(
-                                            'id',
-                                            partId
-                                        )
-                                        .single()
-                            );
-
-
-                        if (!parcela) {
-
-                            throw new Error(
-                                `Parcela ${item.part.numero} não encontrada.`
-                            );
-                        }
-
-
-                        const valorJaPago =
-                            Number(
-                                parcela.valor_pago ||
-                                0
-                            );
-
-
-                        const valorParcela =
-                            Number(
-                                parcela.valor ||
-                                0
-                            );
-
-
-                        const valorRestante =
-                            Math.max(
-                                0,
-                                valorParcela -
-                                valorJaPago
-                            );
-
-
-                        if (
-                            value >
-                            valorRestante + 0.01
-                        ) {
-
-                            throw new Error(
-                                `A parcela ${item.part.numero} foi alterada. O valor máximo agora é ${fmtMoney(valorRestante)}.`
-                            );
-                        }
-
-
-                        await supabaseQuery(
-                            (c) =>
-                                c
-                                    .from(
-                                        'pagamentos'
-                                    )
-                                    .insert({
-
-                                        parcela_id:
-                                            partId,
-
-                                        valor:
-                                            value,
-
-                                        data_pagamento:
-                                            dataPagamento,
-
-                                        forma_pagamento:
-                                            formaPagamento,
-
-                                        id_transacao:
-                                            txid ||
-                                            null,
-
-                                        status:
-                                            'confirmado'
-
-                                    })
-                        );
-
-
-                        const novoTotalPago =
-                            valorJaPago +
-                            value;
-
-
-                        const novoStatus =
-                            novoTotalPago >=
-                            valorParcela
-
-                                ? 'paga'
-
-                                : 'pendente';
-
-
-                        await supabaseQuery(
-                            (c) =>
-                                c
-                                    .from(
-                                        'parcelas'
-                                    )
-                                    .update({
-
-                                        status:
-                                            novoStatus,
-
-                                        valor_pago:
-                                            novoTotalPago,
-
-                                        data_pagamento:
-                                            novoStatus ===
-                                            'paga'
-
-                                                ? dataPagamento
-
-                                                : null
-
-                                    })
-                                    .eq(
-                                        'id',
-                                        partId
-                                    )
-                        );
-                    }
-
-
-                    const totalRecebido =
-                        selected.reduce(
-                            (sum, item) =>
-                                sum +
-                                item.amount,
-
-                            0
-                        );
-
-
-                    toast(
-
-                        selected.length === 1
-
-                            ? 'Recebimento registrado com sucesso.'
-
-                            : `${selected.length} parcelas recebidas. Total: ${fmtMoney(totalRecebido)}.`
-
-                    );
-
-
-                    document.getElementById(
-                        'payment-modal'
-                    ).innerHTML = '';
-
-
-                    await Promise.all([
-
-                        loadPayments(),
-
-                        loadOpenInstallments()
-
-                    ]);
-
-                } catch (error) {
-
-                    console.error(error);
-
-
-                    toast(
-                        error.message ||
-                        'Erro ao registrar recebimento.',
-                        'error'
-                    );
-
-
-                    const submitButton =
-                        event.currentTarget.querySelector(
-                            'button[type="submit"]'
-                        );
-
-
-                    if (submitButton) {
-
-                        submitButton.disabled =
-                            false;
-
-                        submitButton.textContent =
-                            'Registrar recebimento';
-                    }
-                }
-            };
-
-
-        selectedPaymentClient =
-            null;
-
-        selectedPaymentParts =
-            [];
-
-
-        if (options.partId) {
-
-            const part =
-                openInstallments.find(
-                    (item) =>
-                        String(item.id) ===
-                        String(options.partId)
-                );
-
-
-            if (part) {
-
-                selectPaymentClient(
-                    getClientKey(part),
-                    part.id
-                );
-
-                return;
-            }
+        if (!pagamento) {
+
+            throw new Error(
+                'Recebimento não encontrado.'
+            );
         }
 
 
-        clearPaymentClient();
+        const parcelaId =
+            pagamento.parcela_id;
+
+
+        /*
+         * Exclui pagamento
+         */
+
+        await supabaseQuery(
+            (c) =>
+                c
+                    .from('pagamentos')
+                    .delete()
+                    .eq(
+                        'id',
+                        paymentId
+                    )
+        );
+
+
+        /*
+         * Busca pagamentos restantes
+         */
+
+        const pagamentosRestantes =
+            await supabaseQuery(
+                (c) =>
+                    c
+                        .from('pagamentos')
+                        .select(
+                            'valor,data_pagamento'
+                        )
+                        .eq(
+                            'parcela_id',
+                            parcelaId
+                        )
+                        .order(
+                            'data_pagamento',
+                            {
+                                ascending:false
+                            }
+                        )
+            ) || [];
+
+
+        const totalPago =
+            pagamentosRestantes.reduce(
+                (total, item) =>
+                    total +
+                    Number(
+                        item.valor || 0
+                    ),
+
+                0
+            );
+
+
+        /*
+         * Busca parcela
+         */
+
+        const parcela =
+            await supabaseQuery(
+                (c) =>
+                    c
+                        .from('parcelas')
+                        .select(
+                            'id,valor'
+                        )
+                        .eq(
+                            'id',
+                            parcelaId
+                        )
+                        .single()
+            );
+
+
+        if (!parcela) {
+
+            throw new Error(
+                'Parcela relacionada não encontrada.'
+            );
+        }
+
+
+        const valorParcela =
+            Number(
+                parcela.valor || 0
+            );
+
+
+        const novoStatus =
+            totalPago >=
+            valorParcela
+                ? 'paga'
+                : 'pendente';
+
+
+        /*
+         * Última data de pagamento
+         */
+
+        const ultimaData =
+            pagamentosRestantes.length
+                ? pagamentosRestantes[0]
+                    .data_pagamento
+                : null;
+
+
+        /*
+         * Atualiza parcela
+         */
+
+        await supabaseQuery(
+            (c) =>
+                c
+                    .from('parcelas')
+                    .update({
+
+                        status:
+                            novoStatus,
+
+                        valor_pago:
+                            totalPago,
+
+                        data_pagamento:
+                            novoStatus ===
+                            'paga'
+                                ? ultimaData
+                                : null
+
+                    })
+                    .eq(
+                        'id',
+                        parcelaId
+                    )
+        );
+
+
+        notify(
+            'Recebimento excluído e parcela atualizada.'
+        );
+
+
+        await Promise.all([
+
+            loadPayments(),
+
+            loadOpenInstallments()
+
+        ]);
+
 
     } catch (error) {
 
-        console.error(error);
+        console.error(
+            'Erro ao excluir:',
+            error
+        );
 
-        toast(
-            'Não foi possível abrir o registro de recebimento.',
+
+        notify(
+            error.message ||
+            'Erro ao excluir recebimento.',
             'error'
         );
     }
 }
 
 
-function setupPaymentFilters() {
+/* =====================================================
+   INICIALIZAÇÃO
+===================================================== */
 
-    document
-        .querySelectorAll(
-            '.payment-filter'
-        )
-        .forEach((button) => {
+function initPaymentsPage() {
 
-            button.onclick =
-                () => {
+    injectPaymentStyles();
 
-                    currentOpenFilter =
-                        button.dataset.filter ||
-                        'todos';
+    createOpenPaymentsArea();
 
 
-                    document
-                        .querySelectorAll(
-                            '.payment-filter'
-                        )
-                        .forEach((item) => {
+    /*
+     * Botão Registrar recebimento
+     */
 
-                            item.classList.toggle(
-                                'active',
-                                item === button
-                            );
-                        });
-
-
-                    renderOpenInstallments();
-                };
-        });
-
-
-    document
-        .getElementById(
-            'open-payment-search'
-        )
-        ?.addEventListener(
-            'input',
-            renderOpenInstallments
+    const newPayment =
+        document.getElementById(
+            'new-payment'
         );
+
+
+    if (newPayment) {
+
+        /*
+         * Evita duplicar eventos
+         */
+
+        newPayment.onclick =
+            () => {
+
+                openPaymentModal();
+            };
+    }
+
+
+    /*
+     * Carrega histórico
+     */
+
+    loadPayments();
+
+
+    /*
+     * Carrega parcelas abertas
+     */
+
+    loadOpenInstallments();
 }
 
 
-// Fecha resultados de clientes
-// ao clicar fora da busca/modal.
+/* =====================================================
+   INICIA
+===================================================== */
 
-document.addEventListener(
-    'click',
-    (event) => {
+if (
+    document.readyState ===
+    'loading'
+) {
 
-        const results =
-            document.getElementById(
-                'client-results'
-            );
-
-        const search =
-            document.getElementById(
-                'payment-client-search'
-            );
-
-
-        if (
-            results &&
-            search &&
-            !search.contains(
-                event.target
-            ) &&
-            !results.contains(
-                event.target
-            )
-        ) {
-
-            results.classList.remove(
-                'visible'
-            );
-        }
-    }
-);
-
-
-document
-    .getElementById(
-        'new-payment'
-    )
-    ?.addEventListener(
-        'click',
-        () => openPaymentModal()
+    document.addEventListener(
+        'DOMContentLoaded',
+        initPaymentsPage
     );
 
+} else {
 
-setupPaymentFilters();
-
-loadPayments();
-
-loadOpenInstallments();
+    initPaymentsPage();
+}
