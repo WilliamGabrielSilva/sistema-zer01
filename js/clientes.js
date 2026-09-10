@@ -1,7 +1,6 @@
-
 /* =========================================================
-   CLIENTES
-   Cadastro, dívida existente e exclusão.
+   CLIENTES — SISTEMA ZER01
+   Cadastro, edição, dívida existente e exclusão.
    Fonte única de dados: Supabase
    ========================================================= */
 
@@ -23,7 +22,6 @@ async function loadClients() {
                     .order('nome')
         ) || [];
 
-
     renderClients();
 }
 
@@ -37,13 +35,12 @@ function renderClients() {
     const term =
         (
             document
-                .getElementById(
-                    'client-search'
-                )
+                .getElementById('client-search')
                 ?.value ||
             ''
         )
-        .toLowerCase();
+        .toLowerCase()
+        .trim();
 
 
     const rows =
@@ -92,13 +89,12 @@ function renderClients() {
                 (c) => {
 
                     /*
-                       Somente administrador
-                       pode excluir cliente.
+                       Excluir continua sendo
+                       exclusivo do administrador.
                     */
 
                     const botaoExcluir =
-                        typeof isAdmin ===
-                            'function' &&
+                        typeof isAdmin === 'function' &&
                         isAdmin()
 
                         ? `
@@ -109,7 +105,6 @@ function renderClients() {
                                 Excluir
                             </button>
                         `
-
                         : '';
 
 
@@ -123,15 +118,11 @@ function renderClients() {
                             </td>
 
                             <td>
-                                ${display(
-                                    c.cpf_cnpj
-                                )}
+                                ${display(c.cpf_cnpj)}
                             </td>
 
                             <td>
-                                ${display(
-                                    c.telefone
-                                )}
+                                ${display(c.telefone)}
                             </td>
 
                             <td>
@@ -152,6 +143,13 @@ function renderClients() {
                                     data-id="${c.id}"
                                 >
                                     Ver
+                                </button>
+
+                                <button
+                                    class="btn btn-ghost edit-client"
+                                    data-id="${c.id}"
+                                >
+                                    Editar
                                 </button>
 
                                 ${botaoExcluir}
@@ -181,9 +179,7 @@ function renderClients() {
        ===================================================== */
 
     document
-        .querySelectorAll(
-            '.view-client'
-        )
+        .querySelectorAll('.view-client')
         .forEach(
             (button) => {
 
@@ -197,13 +193,29 @@ function renderClients() {
 
 
     /* =====================================================
+       BOTÃO EDITAR
+       ===================================================== */
+
+    document
+        .querySelectorAll('.edit-client')
+        .forEach(
+            (button) => {
+
+                button.onclick =
+                    () =>
+                        editClient(
+                            button.dataset.id
+                        );
+            }
+        );
+
+
+    /* =====================================================
        BOTÃO EXCLUIR
        ===================================================== */
 
     document
-        .querySelectorAll(
-            '.delete-client'
-        )
+        .querySelectorAll('.delete-client')
         .forEach(
             (button) => {
 
@@ -214,6 +226,360 @@ function renderClients() {
                         );
             }
         );
+}
+
+
+/* =========================================================
+   MODAL DE EDIÇÃO
+   ========================================================= */
+
+function editClient(id) {
+
+    const client =
+        clients.find(
+            (item) =>
+                item.id === id
+        );
+
+
+    if (!client) {
+
+        toast(
+            'Cliente não encontrado.',
+            'error'
+        );
+
+        return;
+    }
+
+
+    document
+        .getElementById(
+            'client-modal'
+        )
+        .innerHTML = `
+
+        <div class="modal">
+
+            <form
+                class="modal-card"
+                id="edit-client-form"
+            >
+
+                <div class="modal-head">
+
+                    <div>
+
+                        <span class="eyebrow">
+                            EDITAR CLIENTE
+                        </span>
+
+                        <h3>
+                            ${safe(client.nome)}
+                        </h3>
+
+                    </div>
+
+                    <button
+                        type="button"
+                        class="icon-btn close-modal"
+                    >
+                        ×
+                    </button>
+
+                </div>
+
+
+                <div class="form-grid">
+
+                    <div class="field full">
+
+                        <label>
+                            Nome *
+                        </label>
+
+                        <input
+                            id="edit-client-name"
+                            value="${safe(client.nome)}"
+                            required
+                        >
+
+                    </div>
+
+
+                    <div class="field">
+
+                        <label>
+                            CPF/CNPJ
+                        </label>
+
+                        <input
+                            id="edit-client-doc"
+                            value="${safe(client.cpf_cnpj)}"
+                        >
+
+                    </div>
+
+
+                    <div class="field">
+
+                        <label>
+                            Telefone
+                        </label>
+
+                        <input
+                            id="edit-client-phone"
+                            value="${safe(client.telefone)}"
+                        >
+
+                    </div>
+
+
+                    <div class="field full">
+
+                        <label>
+                            Endereço
+                        </label>
+
+                        <input
+                            id="edit-client-address"
+                            value="${safe(client.endereco)}"
+                        >
+
+                    </div>
+
+
+                    <div class="field full">
+
+                        <label>
+                            Observações
+                        </label>
+
+                        <textarea
+                            id="edit-client-notes"
+                        >${safe(client.observacoes)}</textarea>
+
+                    </div>
+
+                </div>
+
+
+                <div
+                    style="
+                        display:flex;
+                        justify-content:end;
+                        gap:8px;
+                        margin-top:22px
+                    "
+                >
+
+                    <button
+                        type="button"
+                        class="btn close-modal"
+                    >
+                        Cancelar
+                    </button>
+
+
+                    <button
+                        type="submit"
+                        class="btn btn-primary"
+                    >
+                        Salvar alterações
+                    </button>
+
+                </div>
+
+            </form>
+
+        </div>
+    `;
+
+
+    /* =====================================================
+       FECHAR MODAL
+       ===================================================== */
+
+    document
+        .querySelectorAll('.close-modal')
+        .forEach(
+            (button) => {
+
+                button.onclick =
+                    () => {
+
+                        document
+                            .getElementById(
+                                'client-modal'
+                            )
+                            .innerHTML = '';
+                    };
+            }
+        );
+
+
+    /* =====================================================
+       MÁSCARA CPF / CNPJ
+       ===================================================== */
+
+    document
+        .getElementById(
+            'edit-client-doc'
+        )
+        .oninput =
+            (event) => {
+
+                event.target.value =
+                    maskDoc(
+                        event.target.value
+                    );
+            };
+
+
+    /* =====================================================
+       MÁSCARA TELEFONE
+       ===================================================== */
+
+    document
+        .getElementById(
+            'edit-client-phone'
+        )
+        .oninput =
+            (event) => {
+
+                event.target.value =
+                    maskPhone(
+                        event.target.value
+                    );
+            };
+
+
+    /* =====================================================
+       SALVAR EDIÇÃO
+       ===================================================== */
+
+    document
+        .getElementById(
+            'edit-client-form'
+        )
+        .onsubmit =
+            (event) =>
+                saveClientEdit(
+                    event,
+                    id
+                );
+}
+
+
+/* =========================================================
+   SALVAR ALTERAÇÕES DO CLIENTE
+   ========================================================= */
+
+async function saveClientEdit(
+    event,
+    id
+) {
+
+    event.preventDefault();
+
+
+    try {
+
+        const nome =
+            document
+                .getElementById(
+                    'edit-client-name'
+                )
+                .value
+                .trim();
+
+
+        if (!nome) {
+
+            toast(
+                'Informe o nome do cliente.',
+                'error'
+            );
+
+            return;
+        }
+
+
+        await supabaseQuery(
+            (c) =>
+                c
+                    .from('clientes')
+                    .update({
+
+                        nome:
+                            nome,
+
+                        cpf_cnpj:
+                            document
+                                .getElementById(
+                                    'edit-client-doc'
+                                )
+                                .value
+                                .trim() ||
+                            null,
+
+                        telefone:
+                            document
+                                .getElementById(
+                                    'edit-client-phone'
+                                )
+                                .value
+                                .trim() ||
+                            null,
+
+                        endereco:
+                            document
+                                .getElementById(
+                                    'edit-client-address'
+                                )
+                                .value
+                                .trim() ||
+                            null,
+
+                        observacoes:
+                            document
+                                .getElementById(
+                                    'edit-client-notes'
+                                )
+                                .value
+                                .trim() ||
+                            null
+
+                    })
+                    .eq(
+                        'id',
+                        id
+                    )
+        );
+
+
+        toast(
+            'Cliente atualizado com sucesso.'
+        );
+
+
+        document
+            .getElementById(
+                'client-modal'
+            )
+            .innerHTML = '';
+
+
+        await loadClients();
+
+    } catch (error) {
+
+        toast(
+            error.message ||
+            'Não foi possível atualizar o cliente.',
+            'error'
+        );
+    }
 }
 
 
@@ -280,18 +646,6 @@ function debtRows() {
                     (index + 1)
                 );
 
-
-                /*
-                   Distribui os centavos restantes
-                   entre as primeiras parcelas.
-
-                   Exemplo:
-                   R$ 100 / 3
-
-                   33,34
-                   33,33
-                   33,33
-                */
 
                 const valueCents =
                     baseCents +
@@ -607,6 +961,7 @@ function formModal() {
 
 
                     <button
+                        type="submit"
                         class="btn btn-primary"
                     >
                         Salvar cliente
@@ -621,9 +976,7 @@ function formModal() {
 
 
     document
-        .querySelectorAll(
-            '.close-modal'
-        )
+        .querySelectorAll('.close-modal')
         .forEach(
             (button) => {
 
@@ -669,9 +1022,7 @@ function formModal() {
 
 
     document
-        .querySelectorAll(
-            '.debt-choice'
-        )
+        .querySelectorAll('.debt-choice')
         .forEach(
             (button) => {
 
@@ -796,14 +1147,16 @@ async function saveClient(event) {
                                     .getElementById(
                                         'client-name'
                                     )
-                                    .value,
+                                    .value
+                                    .trim(),
 
                             cpf_cnpj:
                                 document
                                     .getElementById(
                                         'client-doc'
                                     )
-                                    .value ||
+                                    .value
+                                    .trim() ||
                                 null,
 
                             telefone:
@@ -811,7 +1164,8 @@ async function saveClient(event) {
                                     .getElementById(
                                         'client-phone'
                                     )
-                                    .value ||
+                                    .value
+                                    .trim() ||
                                 null,
 
                             endereco:
@@ -819,7 +1173,8 @@ async function saveClient(event) {
                                     .getElementById(
                                         'client-address'
                                     )
-                                    .value ||
+                                    .value
+                                    .trim() ||
                                 null,
 
                             observacoes:
@@ -827,7 +1182,8 @@ async function saveClient(event) {
                                     .getElementById(
                                         'client-notes'
                                     )
-                                    .value ||
+                                    .value
+                                    .trim() ||
                                 null
 
                         })
@@ -859,7 +1215,8 @@ async function saveClient(event) {
                     .getElementById(
                         'debt-description'
                     )
-                    .value ||
+                    .value
+                    .trim() ||
                 !values.length
             ) {
 
@@ -886,6 +1243,7 @@ async function saveClient(event) {
                                                 'debt-description'
                                             )
                                             .value
+                                            .trim()
                                     }`,
 
                                 valor_total:
@@ -990,11 +1348,7 @@ async function saveClient(event) {
 async function deleteClient(id) {
 
     /*
-       PROTEÇÃO REAL DA FUNÇÃO NA INTERFACE.
-
-       Mesmo que o botão seja forçado pelo navegador,
-       vendedor não poderá executar esta ação através
-       do fluxo normal do sistema.
+       Somente administrador.
     */
 
     if (
@@ -1120,9 +1474,7 @@ async function viewClient(id) {
                         </span>
 
                         <h3>
-                            ${safe(
-                                client.nome
-                            )}
+                            ${safe(client.nome)}
                         </h3>
 
                     </div>
@@ -1138,16 +1490,18 @@ async function viewClient(id) {
 
                 <p>
                     CPF/CNPJ:
-                    ${display(
-                        client.cpf_cnpj
-                    )}
+                    ${display(client.cpf_cnpj)}
 
                     ·
 
                     Telefone:
-                    ${display(
-                        client.telefone
-                    )}
+                    ${display(client.telefone)}
+                </p>
+
+
+                <p>
+                    Endereço:
+                    ${display(client.endereco)}
                 </p>
 
 
