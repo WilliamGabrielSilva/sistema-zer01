@@ -3017,6 +3017,32 @@ async function salvarEdicaoVenda(id) {
             throw erroParcelas;
         }
 
+        /* =========================================
+           DIAGNÓSTICO: nenhuma parcela encontrada
+           Se a venda tem parcelas mas a busca voltou
+           vazia, é sinal de venda_id não bater com o
+           id (tipo diferente) ou RLS bloqueando o
+           SELECT em "parcelas". Sem isso, a função
+           seguiria e "teria sucesso" sem alterar nada.
+        ========================================= */
+
+        if (!parcelasVenda || parcelasVenda.length === 0) {
+
+            console.warn(
+                "Nenhuma parcela encontrada para venda_id =",
+                id,
+                "(tipo:", typeof id, ")"
+            );
+
+            alert(
+                "A venda foi atualizada, mas nenhuma parcela foi " +
+                "encontrada para redistribuir (venda_id = " + id + "). " +
+                "Verifique se o id da venda bate com o tipo da coluna " +
+                "venda_id em 'parcelas', e se a policy de SELECT dessa " +
+                "tabela permite a leitura."
+            );
+        }
+
 
         /* =========================================
            TOTAL JÁ PAGO
@@ -3084,10 +3110,43 @@ async function salvarEdicaoVenda(id) {
 
         if (parcelasAbertas.length > 0) {
 
-            const valorBase =
-                novoSaldo / parcelasAbertas.length;
+            /* =========================================
+               PISO: soma do que já foi pago nas
+               parcelas abertas. Nenhuma parcela pode
+               receber um "valor" menor do que o que
+               já foi pago nela — então primeiro
+               reservamos esse piso, e distribuímos
+               apenas o EXCEDENTE do saldo entre as
+               parcelas abertas.
+            ========================================= */
 
-            let acumulado = 0;
+            const pagoNasAbertas =
+                parcelasAbertas.reduce(
+                    (sum, parcela) =>
+                        sum + Number(parcela.valor_pago || 0),
+                    0
+                );
+
+            /*
+               Excedente a distribuir além do que já
+               foi pago em cada parcela aberta. Se o
+               novo total da venda for menor que o que
+               já foi pago (situação anômala), o
+               excedente fica zerado e cada parcela
+               aberta recebe exatamente o seu piso —
+               nunca um valor abaixo do que já pagou.
+            */
+
+            const excedente =
+                Math.max(
+                    0,
+                    novoSaldo - pagoNasAbertas
+                );
+
+            const excedenteBase =
+                excedente / parcelasAbertas.length;
+
+            let acumuladoExcedente = 0;
 
             for (
                 let i = 0;
@@ -3098,7 +3157,10 @@ async function salvarEdicaoVenda(id) {
                 const parcela =
                     parcelasAbertas[i];
 
-                let novoValorParcela;
+                const pisoParcela =
+                    Number(parcela.valor_pago || 0);
+
+                let fatiaExcedente;
 
                 /* =====================================
                 ÚLTIMA PARCELA
@@ -3110,21 +3172,26 @@ async function salvarEdicaoVenda(id) {
                     parcelasAbertas.length - 1
                 ) {
 
-                    novoValorParcela =
+                    fatiaExcedente =
                         Math.round(
-                            (novoSaldo - acumulado) * 100
+                            (excedente - acumuladoExcedente) * 100
                         ) / 100;
 
                 } else {
 
-                    novoValorParcela =
+                    fatiaExcedente =
                         Math.round(
-                            valorBase * 100
+                            excedenteBase * 100
                         ) / 100;
 
-                    acumulado +=
-                        novoValorParcela;
+                    acumuladoExcedente +=
+                        fatiaExcedente;
                 }
+
+                const novoValorParcela =
+                    Math.round(
+                        (pisoParcela + fatiaExcedente) * 100
+                    ) / 100;
 
 
                 /* =====================================
