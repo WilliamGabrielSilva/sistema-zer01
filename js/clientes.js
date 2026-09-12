@@ -470,6 +470,437 @@ function editClient(id) {
                 );
 }
 
+/* =====================================================
+   EDITAR VENDA
+===================================================== */
+
+async function editSale(id) {
+
+    try {
+
+        const { data: venda, error } = await supabaseClient
+            .from("vendas")
+            .select(`
+                *,
+                parcelas(*)
+            `)
+            .eq("id", id)
+            .single();
+
+        if (error) throw error;
+
+        if (!venda) {
+            alert("Venda não encontrada.");
+            return;
+        }
+
+        const descricaoAtual =
+            venda.descricao || "";
+
+        const valorAtual =
+            Number(venda.valor_total || 0);
+
+        const parcelasAtuais =
+            Array.isArray(venda.parcelas)
+                ? venda.parcelas
+                : [];
+
+        const novaDescricao =
+            prompt(
+                "Descrição da venda:",
+                descricaoAtual
+            );
+
+        if (novaDescricao === null) {
+            return;
+        }
+
+        const novoValor =
+            prompt(
+                "Valor total da venda:",
+                valorAtual.toFixed(2).replace(".", ",")
+            );
+
+        if (novoValor === null) {
+            return;
+        }
+
+        const valorNumerico =
+            Number(
+                String(novoValor)
+                    .replace(/\./g, "")
+                    .replace(",", ".")
+            );
+
+        if (
+            !Number.isFinite(valorNumerico) ||
+            valorNumerico < 0
+        ) {
+            alert("Informe um valor válido.");
+            return;
+        }
+
+        const { error: erroVenda } =
+            await supabaseClient
+                .from("vendas")
+                .update({
+                    descricao: novaDescricao.trim(),
+                    valor_total: valorNumerico
+                })
+                .eq("id", id);
+
+        if (erroVenda) {
+            throw erroVenda;
+        }
+
+        /*
+         * Se houver apenas UMA parcela e ela ainda
+         * não tiver sido paga, ajustamos o valor dela
+         * automaticamente para acompanhar a venda.
+         */
+
+        if (parcelasAtuais.length === 1) {
+
+            const parcela =
+                parcelasAtuais[0];
+
+            const valorPago =
+                Number(parcela.valor_pago || 0);
+
+            if (
+                parcela.status !== "paga" &&
+                valorPago <= valorNumerico
+            ) {
+
+                const novoValorParcela =
+                    Math.max(
+                        0,
+                        valorNumerico - valorPago
+                    );
+
+                const { error: erroParcela } =
+                    await supabaseClient
+                        .from("parcelas")
+                        .update({
+                            valor: novoValorParcela
+                        })
+                        .eq("id", parcela.id);
+
+                if (erroParcela) {
+                    throw erroParcela;
+                }
+            }
+        }
+
+        alert("Venda atualizada com sucesso!");
+
+        /*
+         * Reabre os dados atualizados do cliente
+         */
+        await viewClient(venda.cliente_id);
+
+    } catch (erro) {
+
+        console.error(
+            "Erro ao editar venda:",
+            erro
+        );
+
+        alert(
+            "Não foi possível editar a venda.\n\n" +
+            (erro.message || erro)
+        );
+    }
+}
+
+/* =====================================================
+   EDITAR PARCELA
+===================================================== */
+
+async function editParcela(id) {
+
+    try {
+
+        const { data: parcela, error } =
+            await supabaseClient
+                .from("parcelas")
+                .select("*")
+                .eq("id", id)
+                .single();
+
+        if (error) throw error;
+
+        if (!parcela) {
+            alert("Parcela não encontrada.");
+            return;
+        }
+
+        /* Abre o modal de edição */
+        abrirModalEditarParcela(parcela);
+        return;
+
+        /* =========================================
+           VALOR
+        ========================================= */
+
+        const valorAtual =
+            Number(parcela.valor || 0);
+
+        const novoValor =
+            prompt(
+                "Valor da parcela:",
+                valorAtual.toFixed(2).replace(".", ",")
+            );
+
+        if (novoValor === null) {
+            return;
+        }
+
+        const valorNumerico =
+            Number(
+                String(novoValor)
+                    .replace(/\./g, "")
+                    .replace(",", ".")
+            );
+
+        if (
+            !Number.isFinite(valorNumerico) ||
+            valorNumerico < 0
+        ) {
+            alert("Informe um valor válido.");
+            return;
+        }
+
+
+        /* =========================================
+           VENCIMENTO
+        ========================================= */
+
+        const vencimentoAtual =
+            parcela.vencimento
+                ? String(parcela.vencimento).substring(0, 10)
+                : "";
+
+        const novoVencimento =
+            prompt(
+                "Data de vencimento (AAAA-MM-DD):",
+                vencimentoAtual
+            );
+
+        if (novoVencimento === null) {
+            return;
+        }
+
+        if (
+            !/^\d{4}-\d{2}-\d{2}$/.test(
+                novoVencimento
+            )
+        ) {
+            alert(
+                "Data inválida.\n\n" +
+                "Use o formato AAAA-MM-DD."
+            );
+
+            return;
+        }
+
+
+        /* =========================================
+           VALOR PAGO
+        ========================================= */
+
+        const valorPagoAtual =
+            Number(parcela.valor_pago || 0);
+
+        const novoValorPago =
+            prompt(
+                "Valor já pago:",
+                valorPagoAtual
+                    .toFixed(2)
+                    .replace(".", ",")
+            );
+
+        if (novoValorPago === null) {
+            return;
+        }
+
+        const valorPagoNumerico =
+            Number(
+                String(novoValorPago)
+                    .replace(/\./g, "")
+                    .replace(",", ".")
+            );
+
+        if (
+            !Number.isFinite(valorPagoNumerico) ||
+            valorPagoNumerico < 0
+        ) {
+            alert("Informe um valor pago válido.");
+            return;
+        }
+
+        if (
+            valorPagoNumerico >
+            valorNumerico
+        ) {
+            alert(
+                "O valor pago não pode ser maior " +
+                "que o valor da parcela."
+            );
+
+            return;
+        }
+
+
+        /* =========================================
+           STATUS AUTOMÁTICO
+        ========================================= */
+
+        let novoStatus = "pendente";
+
+        if (
+            valorNumerico > 0 &&
+            valorPagoNumerico >= valorNumerico
+        ) {
+
+            novoStatus = "paga";
+
+        } else {
+
+            const hoje =
+                new Date();
+
+            hoje.setHours(
+                0,
+                0,
+                0,
+                0
+            );
+
+            const dataVencimento =
+                new Date(
+                    novoVencimento +
+                    "T00:00:00"
+                );
+
+            if (
+                dataVencimento < hoje
+            ) {
+
+                novoStatus = "atrasada";
+
+            } else {
+
+                novoStatus = "pendente";
+
+            }
+        }
+
+
+        /* =========================================
+           DATA DE PAGAMENTO
+        ========================================= */
+
+        let dataPagamento =
+            parcela.data_pagamento || null;
+
+        if (novoStatus === "paga") {
+
+            if (!dataPagamento) {
+
+                dataPagamento =
+                    new Date()
+                        .toISOString()
+                        .split("T")[0];
+
+            }
+
+        } else {
+
+            dataPagamento = null;
+
+        }
+
+
+        /* =========================================
+           ATUALIZAR PARCELA
+        ========================================= */
+
+        const { error: erroUpdate } =
+            await supabaseClient
+                .from("parcelas")
+                .update({
+
+                    valor:
+                        valorNumerico,
+
+                    vencimento:
+                        novoVencimento,
+
+                    valor_pago:
+                        valorPagoNumerico,
+
+                    status:
+                        novoStatus,
+
+                    data_pagamento:
+                        dataPagamento
+
+                })
+                .eq("id", id);
+
+
+        if (erroUpdate) {
+            throw erroUpdate;
+        }
+
+
+        alert(
+            "Parcela atualizada com sucesso!"
+        );
+
+
+        /* =========================================
+           ATUALIZA A TELA
+        ========================================= */
+
+        if (parcela.venda_id) {
+
+            const { data: venda } =
+                await supabaseClient
+                    .from("vendas")
+                    .select("cliente_id")
+                    .eq(
+                        "id",
+                        parcela.venda_id
+                    )
+                    .single();
+
+            if (venda) {
+
+                await viewClient(
+                    venda.cliente_id
+                );
+
+            }
+
+        }
+
+    } catch (erro) {
+
+        console.error(
+            "Erro ao editar parcela:",
+            erro
+        );
+
+        alert(
+            "Não foi possível editar a parcela.\n\n" +
+            (erro.message || erro)
+        );
+
+    }
+
+}
 
 /* =========================================================
    SALVAR ALTERAÇÕES DO CLIENTE
@@ -1454,6 +1885,102 @@ async function viewClient(id) {
                 sale.parcelas || []
         );
 
+/* =====================================================
+   VENDAS DO CLIENTE
+===================================================== */
+
+    const vendasHTML =
+        sales
+            .map(
+                (sale) => `
+
+                    <div
+                        class="panel"
+                        style="
+                            margin-top:12px;
+                            padding:16px;
+                        "
+                    >
+
+                        <div
+                            style="
+                                display:flex;
+                                justify-content:space-between;
+                                align-items:center;
+                                gap:12px;
+                                flex-wrap:wrap;
+                            "
+                        >
+
+                            <div>
+
+                                <strong>
+                                    Venda
+                                </strong>
+
+                                <div
+                                    style="
+                                        color:var(--muted);
+                                        margin-top:5px;
+                                    "
+                                >
+                                    ${dateBR(sale.data_venda)}
+                                </div>
+
+                            </div>
+
+                            <strong>
+                                ${fmtMoney(sale.valor_total)}
+                            </strong>
+
+                        </div>
+
+
+                        <div
+                            style="
+                                margin-top:12px;
+                                color:var(--muted);
+                            "
+                        >
+                            ${safe(sale.descricao || 'Sem descrição')}
+                        </div>
+
+
+                        <div
+                            style="
+                                margin-top:12px;
+                                display:flex;
+                                justify-content:space-between;
+                                align-items:center;
+                                gap:10px;
+                                flex-wrap:wrap;
+                            "
+                        >
+
+                            <span>
+                                ${
+                                    (sale.parcelas || []).length
+                                }
+                                parcela(s)
+                            </span>
+
+
+                            <button
+                                type="button"
+                                class="btn btn-ghost"
+                                onclick="editSale('${sale.id}')"
+                            >
+                                Editar venda
+                            </button>
+
+                        </div>
+
+                    </div>
+
+                `
+            )
+            .join('');
+
 
     document
         .getElementById(
@@ -1648,39 +2175,59 @@ async function viewClient(id) {
 
                             ${
                                 parts
-                                    .map(
-                                        (p) => `
+                                .map(
+                                    (p) => `
 
-                                        <tr>
+                                    <tr>
 
-                                            <td>
-                                                Parcela ${p.numero}
-                                            </td>
+                                        <td>
+                                            Parcela ${p.numero}
+                                        </td>
 
-                                            <td>
-                                                ${fmtMoney(
-                                                    p.valor
-                                                )}
-                                            </td>
+                                        <td>
+                                            ${fmtMoney(
+                                                p.valor
+                                            )}
+                                        </td>
 
-                                            <td>
-                                                ${dateBR(
-                                                    p.vencimento
-                                                )}
-                                            </td>
+                                        <td>
+                                            ${dateBR(
+                                                p.vencimento
+                                            )}
+                                        </td>
 
-                                            <td>
-                                                ${statusHTML(
-                                                    statusParcela(
-                                                        p
-                                                    )
-                                                )}
-                                            </td>
+                                        <td>
+                                            ${statusHTML(
+                                                statusParcela(
+                                                    p
+                                                )
+                                            )}
+                                        </td>
 
-                                        </tr>
-                                    `
-                                    )
-                                    .join('') ||
+                                        <td>
+
+                                            <button
+                                                type="button"
+                                                class="btn btn-ghost"
+                                                onclick="editInstallment('${p.id}')"
+                                            >
+                                                Editar
+                                            </button>
+
+                                        </td>
+                                        <td>
+                                            <button
+                                                type="button"
+                                                class="btn btn-ghost"
+                                                onclick="editParcela('${p.id}')"
+                                            >
+                                                Editar
+                                            </button>
+                                        </td>
+                                    </tr>
+                                `
+                                )
+                                .join('') ||
 
                                 `
                                     <tr>
@@ -1774,3 +2321,487 @@ loadClients()
             }
         }
     );
+
+/* =====================================================
+   MODAL — EDITAR PARCELA
+===================================================== */
+
+function abrirModalEditarParcela(parcela) {
+
+    const modalExistente =
+        document.getElementById("modalEditarParcela");
+
+    if (modalExistente) {
+        modalExistente.remove();
+    }
+
+    const valor =
+        Number(parcela.valor || 0)
+            .toFixed(2)
+            .replace(".", ",");
+
+    const valorPago =
+        Number(parcela.valor_pago || 0)
+            .toFixed(2)
+            .replace(".", ",");
+
+    const vencimento =
+        parcela.vencimento
+            ? String(parcela.vencimento).substring(0, 10)
+            : "";
+
+    const modal =
+        document.createElement("div");
+
+    modal.id = "modalEditarParcela";
+
+    modal.style.cssText = `
+        position:fixed;
+        inset:0;
+        background:rgba(0,0,0,.75);
+        display:flex;
+        align-items:center;
+        justify-content:center;
+        z-index:9999;
+        padding:20px;
+    `;
+
+    modal.innerHTML = `
+
+        <div
+            style="
+                width:100%;
+                max-width:480px;
+                background:var(--card,#151515);
+                border:1px solid rgba(255,255,255,.08);
+                border-radius:16px;
+                padding:24px;
+                box-shadow:0 20px 60px rgba(0,0,0,.5);
+            "
+        >
+
+            <div
+                style="
+                    display:flex;
+                    justify-content:space-between;
+                    align-items:center;
+                    margin-bottom:20px;
+                "
+            >
+
+                <div>
+
+                    <h2 style="margin:0;">
+                        Editar parcela
+                    </h2>
+
+                    <div
+                        style="
+                            color:var(--muted);
+                            margin-top:5px;
+                        "
+                    >
+                        Parcela ${parcela.numero || "-"}
+                    </div>
+
+                </div>
+
+                <button
+                    type="button"
+                    class="btn btn-ghost"
+                    onclick="fecharModalEditarParcela()"
+                >
+                    ✕
+                </button>
+
+            </div>
+
+
+            <div style="margin-bottom:15px;">
+
+                <label>
+                    Valor da parcela
+                </label>
+
+                <input
+                    id="editarParcelaValor"
+                    type="text"
+                    inputmode="decimal"
+                    value="${valor}"
+                    style="
+                        width:100%;
+                        margin-top:6px;
+                    "
+                >
+
+            </div>
+
+
+            <div style="margin-bottom:15px;">
+
+                <label>
+                    Data de vencimento
+                </label>
+
+                <input
+                    id="editarParcelaVencimento"
+                    type="date"
+                    value="${vencimento}"
+                    style="
+                        width:100%;
+                        margin-top:6px;
+                    "
+                >
+
+            </div>
+
+
+            <div style="margin-bottom:20px;">
+
+                <label>
+                    Valor já pago
+                </label>
+
+                <input
+                    id="editarParcelaValorPago"
+                    type="text"
+                    inputmode="decimal"
+                    value="${valorPago}"
+                    style="
+                        width:100%;
+                        margin-top:6px;
+                    "
+                >
+
+            </div>
+
+
+            <div
+                style="
+                    display:flex;
+                    gap:10px;
+                    justify-content:flex-end;
+                "
+            >
+
+                <button
+                    type="button"
+                    class="btn btn-ghost"
+                    onclick="fecharModalEditarParcela()"
+                >
+                    Cancelar
+                </button>
+
+                <button
+                    type="button"
+                    class="btn btn-primary"
+                    onclick="salvarEdicaoParcela('${parcela.id}')"
+                >
+                    Salvar alterações
+                </button>
+
+            </div>
+
+        </div>
+    `;
+
+    document.body.appendChild(modal);
+
+
+    /* Fecha clicando fora */
+
+    modal.addEventListener(
+        "click",
+        function(event) {
+
+            if (event.target === modal) {
+                fecharModalEditarParcela();
+            }
+
+        }
+    );
+
+}
+
+
+/* =====================================================
+   FECHAR MODAL
+===================================================== */
+
+function fecharModalEditarParcela() {
+
+    const modal =
+        document.getElementById(
+            "modalEditarParcela"
+        );
+
+    if (modal) {
+        modal.remove();
+    }
+
+}
+
+/* =====================================================
+   SALVAR EDIÇÃO DA PARCELA
+===================================================== */
+
+async function salvarEdicaoParcela(id) {
+
+    try {
+
+        const campoValor =
+            document.getElementById(
+                "editarParcelaValor"
+            );
+
+        const campoVencimento =
+            document.getElementById(
+                "editarParcelaVencimento"
+            );
+
+        const campoValorPago =
+            document.getElementById(
+                "editarParcelaValorPago"
+            );
+
+
+        if (
+            !campoValor ||
+            !campoVencimento ||
+            !campoValorPago
+        ) {
+            alert(
+                "Não foi possível localizar os campos da parcela."
+            );
+
+            return;
+        }
+
+
+        /* =========================================
+           CONVERTER VALORES
+        ========================================= */
+
+        const valor =
+            Number(
+                String(campoValor.value)
+                    .replace(/\./g, "")
+                    .replace(",", ".")
+            );
+
+        const valorPago =
+            Number(
+                String(campoValorPago.value)
+                    .replace(/\./g, "")
+                    .replace(",", ".")
+            );
+
+
+        /* =========================================
+           VALIDAÇÕES
+        ========================================= */
+
+        if (
+            !Number.isFinite(valor) ||
+            valor < 0
+        ) {
+            alert(
+                "Informe um valor de parcela válido."
+            );
+
+            return;
+        }
+
+
+        if (
+            !Number.isFinite(valorPago) ||
+            valorPago < 0
+        ) {
+            alert(
+                "Informe um valor pago válido."
+            );
+
+            return;
+        }
+
+
+        if (valorPago > valor) {
+
+            alert(
+                "O valor pago não pode ser maior " +
+                "que o valor da parcela."
+            );
+
+            return;
+        }
+
+
+        if (!campoVencimento.value) {
+
+            alert(
+                "Informe a data de vencimento."
+            );
+
+            return;
+        }
+
+
+        /* =========================================
+           DEFINIR STATUS
+        ========================================= */
+
+        let status = "pendente";
+
+        if (
+            valor > 0 &&
+            valorPago >= valor
+        ) {
+
+            status = "paga";
+
+        } else {
+
+            const hoje =
+                new Date();
+
+            hoje.setHours(
+                0,
+                0,
+                0,
+                0
+            );
+
+            const vencimento =
+                new Date(
+                    campoVencimento.value +
+                    "T00:00:00"
+                );
+
+            if (vencimento < hoje) {
+
+                status = "atrasada";
+
+            } else {
+
+                status = "pendente";
+
+            }
+
+        }
+
+
+        /* =========================================
+           DATA DE PAGAMENTO
+        ========================================= */
+
+        let dataPagamento = null;
+
+
+        if (status === "paga") {
+
+            dataPagamento =
+                new Date()
+                    .toISOString()
+                    .split("T")[0];
+
+        }
+
+
+        /* =========================================
+           ATUALIZAR SUPABASE
+        ========================================= */
+
+        const { data, error } =
+            await supabaseClient
+                .from("parcelas")
+                .update({
+
+                    valor:
+                        valor,
+
+                    vencimento:
+                        campoVencimento.value,
+
+                    valor_pago:
+                        valorPago,
+
+                    status:
+                        status,
+
+                    data_pagamento:
+                        dataPagamento
+
+                })
+                .eq("id", id)
+                .select()
+                .single();
+
+
+        if (error) {
+            throw error;
+        }
+
+
+        /* =========================================
+           FECHAR MODAL
+        ========================================= */
+
+        fecharModalEditarParcela();
+
+
+        alert(
+            "Parcela atualizada com sucesso!"
+        );
+
+
+        /* =========================================
+           DESCOBRIR O CLIENTE
+        ========================================= */
+
+        if (data && data.venda_id) {
+
+            const {
+                data: venda,
+                error: erroVenda
+            } =
+                await supabaseClient
+                    .from("vendas")
+                    .select("cliente_id")
+                    .eq(
+                        "id",
+                        data.venda_id
+                    )
+                    .single();
+
+
+            if (erroVenda) {
+                throw erroVenda;
+            }
+
+
+            if (venda) {
+
+                await viewClient(
+                    venda.cliente_id
+                );
+
+            }
+
+        }
+
+
+    } catch (erro) {
+
+        console.error(
+            "Erro ao salvar parcela:",
+            erro
+        );
+
+        alert(
+            "Não foi possível salvar a parcela.\n\n" +
+            (erro.message || erro)
+        );
+
+    }
+
+}
