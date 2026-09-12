@@ -3079,7 +3079,7 @@ async function salvarEdicaoVenda(id) {
 
 
         /* =========================================
-           REDISTRIBUIR PARCELAS ABERTAS
+        REDISTRIBUIR PARCELAS ABERTAS
         ========================================= */
 
         if (parcelasAbertas.length > 0) {
@@ -3099,6 +3099,11 @@ async function salvarEdicaoVenda(id) {
                     parcelasAbertas[i];
 
                 let novoValorParcela;
+
+                /* =====================================
+                ÚLTIMA PARCELA
+                recebe qualquer diferença de centavos
+                ===================================== */
 
                 if (
                     i ===
@@ -3122,20 +3127,21 @@ async function salvarEdicaoVenda(id) {
                 }
 
 
-                /* ================================
-                   STATUS DA PARCELA
-                ================================= */
+                /* =====================================
+                DEFINIR STATUS
+                ===================================== */
 
                 const pago =
                     Number(
                         parcela.valor_pago || 0
                     );
 
-                let novoStatus;
+                let novoStatus = "pendente";
+
 
                 if (
-                    pago >= novoValorParcela &&
-                    novoValorParcela > 0
+                    novoValorParcela > 0 &&
+                    pago >= novoValorParcela
                 ) {
 
                     novoStatus = "paga";
@@ -3152,9 +3158,11 @@ async function salvarEdicaoVenda(id) {
                         0
                     );
 
+
                     const vencimento =
                         new Date(
-                            parcela.vencimento
+                            parcela.vencimento +
+                            "T00:00:00"
                         );
 
                     vencimento.setHours(
@@ -3164,18 +3172,26 @@ async function salvarEdicaoVenda(id) {
                         0
                     );
 
-                    novoStatus =
+
+                    if (
                         vencimento < hoje
-                            ? "atrasada"
-                            : "pendente";
+                    ) {
+
+                        novoStatus = "atrasada";
+
+                    } else {
+
+                        novoStatus = "pendente";
+                    }
                 }
 
 
-                /* ================================
-                   ATUALIZAR PARCELA
-                ================================= */
+                /* =====================================
+                ATUALIZAR PARCELA
+                ===================================== */
 
                 const {
+                    data: parcelaAtualizada,
                     error: erroAtualizacaoParcela
                 } =
                     await supabaseClient
@@ -3183,21 +3199,43 @@ async function salvarEdicaoVenda(id) {
                         .update({
                             valor:
                                 novoValorParcela,
+
                             status:
                                 novoStatus
                         })
                         .eq(
                             "id",
                             parcela.id
-                        );
+                        )
+                        .select()
+                        .single();
+
 
                 if (
                     erroAtualizacaoParcela
                 ) {
+
+                    console.error(
+                        "Erro ao atualizar parcela:",
+                        parcela.id,
+                        erroAtualizacaoParcela
+                    );
+
                     throw erroAtualizacaoParcela;
                 }
+
+
+                /* =====================================
+                CONFIRMAR ATUALIZAÇÃO
+                ===================================== */
+
+                console.log(
+                    "Parcela atualizada:",
+                    parcelaAtualizada
+                );
             }
         }
+        
 
 
         /* =========================================
