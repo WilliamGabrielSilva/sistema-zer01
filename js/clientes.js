@@ -2070,27 +2070,21 @@ async function viewClient(id) {
                         </label>
 
                         <strong>
+
                             ${fmtMoney(
-                                parts
-                                    .filter(
-                                        (p) =>
-                                            p.status ===
-                                            'paga'
-                                    )
-                                    .reduce(
-                                        (
-                                            sum,
-                                            p
-                                        ) =>
-                                            sum +
-                                            Number(
-                                                p.valor_pago ||
-                                                p.valor ||
-                                                0
-                                            ),
-                                        0
-                                    )
+                                parts.reduce(
+                                    (
+                                        sum,
+                                        p
+                                    ) =>
+                                        sum +
+                                        Number(
+                                            p.valor_pago || 0
+                                        ),
+                                    0
+                                )
                             )}
+
                         </strong>
 
                     </div>
