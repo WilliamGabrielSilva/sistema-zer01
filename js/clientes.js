@@ -2943,6 +2943,17 @@ function fecharModalEditarVenda() {
 
 async function salvarEdicaoVenda(id) {
 
+    const descricao =
+        document.getElementById("editarVendaDescricao").value.trim();
+
+    const novoValorTexto =
+        document.getElementById("editarVendaValor").value
+            .replace(/\./g, "")
+            .replace(",", ".");
+
+    const novoValor =
+        Number(novoValorTexto);
+
     try {
 
         const campoDescricao =
