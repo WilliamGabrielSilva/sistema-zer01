@@ -2098,24 +2098,30 @@ async function viewClient(id) {
 
                         <strong>
                             ${fmtMoney(
-                                parts
-                                    .filter(
-                                        (p) =>
-                                            p.status !==
-                                            'paga'
-                                    )
-                                    .reduce(
-                                        (
-                                            sum,
-                                            p
-                                        ) =>
-                                            sum +
+                                parts.reduce(
+                                    (
+                                        sum,
+                                        p
+                                    ) => {
+
+                                        const valor =
                                             Number(
-                                                p.valor ||
-                                                0
-                                            ),
-                                        0
-                                    )
+                                                p.valor || 0
+                                            );
+
+                                        const pago =
+                                            Number(
+                                                p.valor_pago || 0
+                                            );
+
+                                        return sum +
+                                            Math.max(
+                                                0,
+                                                valor - pago
+                                            );
+                                    },
+                                    0
+                                )
                             )}
                         </strong>
 
