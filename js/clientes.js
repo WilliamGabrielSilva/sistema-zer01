@@ -2085,6 +2085,15 @@ async function viewClient(id) {
                     style="margin-top:20px"
                 >
 
+                    <div style="margin-top:24px;">
+                        <h3 style="margin-bottom:14px;">Vendas do cliente</h3>
+
+                        ${
+                        vendasHTML ||
+                        `<div class="empty">Nenhuma venda cadastrada.</div>`
+                        }
+                    </div>
+
                     <table class="data-table">
 
                         <tbody>
