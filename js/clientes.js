@@ -2943,46 +2943,18 @@ function fecharModalEditarVenda() {
 
 async function salvarEdicaoVenda(id) {
 
-    const descricao =
-        document.getElementById("editarVendaDescricao").value.trim();
-
-    const novoValorTexto =
-        document.getElementById("editarVendaValor").value
-            .replace(/\./g, "")
-            .replace(",", ".");
-
-    const novoValor =
-        Number(novoValorTexto);
-
     try {
 
         const campoDescricao =
-            document.getElementById(
-                "editarVendaDescricao"
-            );
+            document.getElementById("editarVendaDescricao");
 
         const campoValor =
-            document.getElementById(
-                "editarVendaValor"
-            );
+            document.getElementById("editarVendaValor");
 
-
-        if (
-            !campoDescricao ||
-            !campoValor
-        ) {
-
-            alert(
-                "Não foi possível localizar os campos da venda."
-            );
-
+        if (!campoDescricao || !campoValor) {
+            alert("Não foi possível localizar os campos da venda.");
             return;
         }
-
-
-        /* =========================================
-           PEGAR VALORES
-        ========================================= */
 
         const descricao =
             campoDescricao.value.trim();
@@ -2994,44 +2966,42 @@ async function salvarEdicaoVenda(id) {
                     .replace(",", ".")
             );
 
-
-        /* =========================================
-           VALIDAÇÕES
-        ========================================= */
-
         if (!descricao) {
-
-            alert(
-                "Informe a descrição da venda."
-            );
-
+            alert("Informe a descrição da venda.");
             campoDescricao.focus();
-
             return;
         }
 
-
-        if (
-            !Number.isFinite(valor) ||
-            valor < 0
-        ) {
-
-            alert(
-                "Informe um valor válido."
-            );
-
+        if (!Number.isFinite(valor) || valor < 0) {
+            alert("Informe um valor válido.");
             campoValor.focus();
-
             return;
         }
 
 
         /* =========================================
-           ATUALIZAR VENDA
+           BUSCAR VENDA ATUAL
         ========================================= */
 
+        const { data: vendaAtual, error: erroVenda } =
+            await supabaseClient
+                .from("vendas")
+                .select("*")
+                .eq("id", id)
+                .single();
+
+        if (erroVenda) {
+            throw erroVenda;
+        }
+
+        if (!vendaAtual) {
+            alert("Venda não encontrada.");
+            return;
+        }
+
+
         /* =========================================
-           BUSCAR PARCELAS ATUAIS DA VENDA
+           BUSCAR PARCELAS
         ========================================= */
 
         const { data: parcelasVenda, error: erroParcelas } =
@@ -3043,103 +3013,190 @@ async function salvarEdicaoVenda(id) {
                     ascending: true
                 });
 
-
         if (erroParcelas) {
             throw erroParcelas;
         }
 
+
         /* =========================================
-           ATUALIZAR PARCELAS EM ABERTO
+           TOTAL JÁ PAGO
         ========================================= */
 
-        const parcelasAbertas = (parcelasVenda || []).filter((p) => {
-            const valor = Number(p.valor || 0);
-            const pago = Number(p.valor_pago || 0);
-
-            return Math.max(0, valor - pago) > 0;
-        });
-
-        if (parcelasAbertas.length > 0) {
-
-            const totalPago = (parcelasVenda || []).reduce(
-                (sum, p) => sum + Number(p.valor_pago || 0),
+        const totalPago =
+            (parcelasVenda || []).reduce(
+                (sum, parcela) =>
+                    sum + Number(parcela.valor_pago || 0),
                 0
             );
 
-            const novoSaldo = Math.max(
+
+        /* =========================================
+           NOVO SALDO
+        ========================================= */
+
+        const novoSaldo =
+            Math.max(
                 0,
-                novoValor - totalPago
+                valor - totalPago
             );
+
+
+        /* =========================================
+           PARCELAS QUE AINDA POSSUEM SALDO
+        ========================================= */
+
+        const parcelasAbertas =
+            (parcelasVenda || []).filter((parcela) => {
+
+                const valorParcela =
+                    Number(parcela.valor || 0);
+
+                const pago =
+                    Number(parcela.valor_pago || 0);
+
+                return valorParcela > pago;
+            });
+
+
+        /* =========================================
+           ATUALIZAR VENDA
+        ========================================= */
+
+        const { data: vendaAtualizada, error: erroAtualizacaoVenda } =
+            await supabaseClient
+                .from("vendas")
+                .update({
+                    descricao: descricao,
+                    valor_total: valor
+                })
+                .eq("id", id)
+                .select()
+                .single();
+
+        if (erroAtualizacaoVenda) {
+            throw erroAtualizacaoVenda;
+        }
+
+
+        /* =========================================
+           REDISTRIBUIR PARCELAS ABERTAS
+        ========================================= */
+
+        if (parcelasAbertas.length > 0) {
 
             const valorBase =
                 novoSaldo / parcelasAbertas.length;
 
             let acumulado = 0;
 
-            for (let i = 0; i < parcelasAbertas.length; i++) {
+            for (
+                let i = 0;
+                i < parcelasAbertas.length;
+                i++
+            ) {
 
-                const parcela = parcelasAbertas[i];
+                const parcela =
+                    parcelasAbertas[i];
 
                 let novoValorParcela;
 
-                if (i === parcelasAbertas.length - 1) {
+                if (
+                    i ===
+                    parcelasAbertas.length - 1
+                ) {
+
                     novoValorParcela =
                         Math.round(
                             (novoSaldo - acumulado) * 100
                         ) / 100;
-                } else {
-                    novoValorParcela =
-                        Math.round(valorBase * 100) / 100;
 
-                    acumulado += novoValorParcela;
+                } else {
+
+                    novoValorParcela =
+                        Math.round(
+                            valorBase * 100
+                        ) / 100;
+
+                    acumulado +=
+                        novoValorParcela;
                 }
 
-                const pago = Number(parcela.valor_pago || 0);
 
-                const novoStatus =
-                    pago >= novoValorParcela
-                        ? "paga"
-                        : (
-                            new Date(parcela.vencimento) <
-                            new Date().setHours(0, 0, 0, 0)
-                                ? "atrasada"
-                                : "pendente"
+                /* ================================
+                   STATUS DA PARCELA
+                ================================= */
+
+                const pago =
+                    Number(
+                        parcela.valor_pago || 0
+                    );
+
+                let novoStatus;
+
+                if (
+                    pago >= novoValorParcela &&
+                    novoValorParcela > 0
+                ) {
+
+                    novoStatus = "paga";
+
+                } else {
+
+                    const hoje =
+                        new Date();
+
+                    hoje.setHours(
+                        0,
+                        0,
+                        0,
+                        0
+                    );
+
+                    const vencimento =
+                        new Date(
+                            parcela.vencimento
                         );
 
-                const { error: erroAtualizacao } =
+                    vencimento.setHours(
+                        0,
+                        0,
+                        0,
+                        0
+                    );
+
+                    novoStatus =
+                        vencimento < hoje
+                            ? "atrasada"
+                            : "pendente";
+                }
+
+
+                /* ================================
+                   ATUALIZAR PARCELA
+                ================================= */
+
+                const {
+                    error: erroAtualizacaoParcela
+                } =
                     await supabaseClient
                         .from("parcelas")
                         .update({
-                            valor: novoValorParcela,
-                            status: novoStatus
+                            valor:
+                                novoValorParcela,
+                            status:
+                                novoStatus
                         })
-                        .eq("id", parcela.id);
+                        .eq(
+                            "id",
+                            parcela.id
+                        );
 
-                if (erroAtualizacao) {
-                    throw erroAtualizacao;
+                if (
+                    erroAtualizacaoParcela
+                ) {
+                    throw erroAtualizacaoParcela;
                 }
             }
-        }
-
-        const { data: vendaAtualizada, error } =
-            await supabaseClient
-                .from("vendas")
-                .update({
-
-                    descricao:
-                        descricao,
-
-                    valor_total:
-                        valor
-
-                })
-                .eq("id", id)
-                .select()
-                .single();
-
-
-        if (error) {
-            throw error;
         }
 
 
@@ -3151,12 +3208,12 @@ async function salvarEdicaoVenda(id) {
 
 
         alert(
-            "Venda atualizada com sucesso!"
+            "Venda e parcelas atualizadas com sucesso!"
         );
 
 
         /* =========================================
-           ATUALIZAR A FICHA DO CLIENTE
+           RECARREGAR CLIENTE
         ========================================= */
 
         if (
@@ -3167,7 +3224,6 @@ async function salvarEdicaoVenda(id) {
             await viewClient(
                 vendaAtualizada.cliente_id
             );
-
         }
 
 
@@ -3182,7 +3238,5 @@ async function salvarEdicaoVenda(id) {
             "Não foi possível salvar a venda.\n\n" +
             (erro.message || erro)
         );
-
     }
-
 }
