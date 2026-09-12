@@ -474,143 +474,59 @@ function editClient(id) {
    EDITAR VENDA
 ===================================================== */
 
+/* =====================================================
+   ABRIR EDIÇÃO DA VENDA
+===================================================== */
+
 async function editSale(id) {
 
     try {
 
-        const { data: venda, error } = await supabaseClient
-            .from("vendas")
-            .select(`
-                *,
-                parcelas(*)
-            `)
-            .eq("id", id)
-            .single();
-
-        if (error) throw error;
-
-        if (!venda) {
-            alert("Venda não encontrada.");
-            return;
-        }
-
-        const descricaoAtual =
-            venda.descricao || "";
-
-        const valorAtual =
-            Number(venda.valor_total || 0);
-
-        const parcelasAtuais =
-            Array.isArray(venda.parcelas)
-                ? venda.parcelas
-                : [];
-
-        const novaDescricao =
-            prompt(
-                "Descrição da venda:",
-                descricaoAtual
-            );
-
-        if (novaDescricao === null) {
-            return;
-        }
-
-        const novoValor =
-            prompt(
-                "Valor total da venda:",
-                valorAtual.toFixed(2).replace(".", ",")
-            );
-
-        if (novoValor === null) {
-            return;
-        }
-
-        const valorNumerico =
-            Number(
-                String(novoValor)
-                    .replace(/\./g, "")
-                    .replace(",", ".")
-            );
-
-        if (
-            !Number.isFinite(valorNumerico) ||
-            valorNumerico < 0
-        ) {
-            alert("Informe um valor válido.");
-            return;
-        }
-
-        const { error: erroVenda } =
+        const { data: venda, error } =
             await supabaseClient
                 .from("vendas")
-                .update({
-                    descricao: novaDescricao.trim(),
-                    valor_total: valorNumerico
-                })
-                .eq("id", id);
+                .select(`
+                    *,
+                    parcelas(*)
+                `)
+                .eq("id", id)
+                .single();
 
-        if (erroVenda) {
-            throw erroVenda;
+
+        if (error) {
+            throw error;
         }
 
-        /*
-         * Se houver apenas UMA parcela e ela ainda
-         * não tiver sido paga, ajustamos o valor dela
-         * automaticamente para acompanhar a venda.
-         */
 
-        if (parcelasAtuais.length === 1) {
+        if (!venda) {
 
-            const parcela =
-                parcelasAtuais[0];
+            alert(
+                "Venda não encontrada."
+            );
 
-            const valorPago =
-                Number(parcela.valor_pago || 0);
-
-            if (
-                parcela.status !== "paga" &&
-                valorPago <= valorNumerico
-            ) {
-
-                const novoValorParcela =
-                    Math.max(
-                        0,
-                        valorNumerico - valorPago
-                    );
-
-                const { error: erroParcela } =
-                    await supabaseClient
-                        .from("parcelas")
-                        .update({
-                            valor: novoValorParcela
-                        })
-                        .eq("id", parcela.id);
-
-                if (erroParcela) {
-                    throw erroParcela;
-                }
-            }
+            return;
         }
 
-        alert("Venda atualizada com sucesso!");
 
-        /*
-         * Reabre os dados atualizados do cliente
-         */
-        await viewClient(venda.cliente_id);
+        /* Abre o novo modal */
+
+        abrirModalEditarVenda(venda);
+
 
     } catch (erro) {
 
         console.error(
-            "Erro ao editar venda:",
+            "Erro ao abrir venda:",
             erro
         );
 
         alert(
-            "Não foi possível editar a venda.\n\n" +
+            "Não foi possível abrir a venda.\n\n" +
             (erro.message || erro)
         );
+
     }
+
 }
 
 /* =====================================================
@@ -2816,6 +2732,434 @@ async function salvarEdicaoParcela(id) {
 
         alert(
             "Não foi possível salvar a parcela.\n\n" +
+            (erro.message || erro)
+        );
+
+    }
+
+}
+
+/* =====================================================
+   MODAL — EDITAR VENDA
+===================================================== */
+
+function abrirModalEditarVenda(venda) {
+
+    const modalExistente =
+        document.getElementById("modalEditarVenda");
+
+    if (modalExistente) {
+        modalExistente.remove();
+    }
+
+    const valor =
+        Number(venda.valor_total || 0)
+            .toFixed(2)
+            .replace(".", ",");
+
+    const modal =
+        document.createElement("div");
+
+    modal.id = "modalEditarVenda";
+
+    modal.style.cssText = `
+        position:fixed;
+        inset:0;
+        background:rgba(0,0,0,.75);
+        display:flex;
+        align-items:center;
+        justify-content:center;
+        z-index:9999;
+        padding:20px;
+    `;
+
+    modal.innerHTML = `
+
+        <div
+            style="
+                width:100%;
+                max-width:520px;
+                background:var(--card,#151515);
+                border:1px solid rgba(255,255,255,.08);
+                border-radius:16px;
+                padding:24px;
+                box-shadow:0 20px 60px rgba(0,0,0,.5);
+            "
+        >
+
+            <div
+                style="
+                    display:flex;
+                    justify-content:space-between;
+                    align-items:center;
+                    margin-bottom:20px;
+                "
+            >
+
+                <div>
+
+                    <h2 style="margin:0;">
+                        Editar venda
+                    </h2>
+
+                    <div
+                        style="
+                            color:var(--muted);
+                            margin-top:5px;
+                        "
+                    >
+                        Dados da venda
+                    </div>
+
+                </div>
+
+                <button
+                    type="button"
+                    class="btn btn-ghost"
+                    onclick="fecharModalEditarVenda()"
+                >
+                    ✕
+                </button>
+
+            </div>
+
+
+            <div style="margin-bottom:15px;">
+
+                <label>
+                    Descrição da venda
+                </label>
+
+                <textarea
+                    id="editarVendaDescricao"
+                    rows="4"
+                    style="
+                        width:100%;
+                        margin-top:6px;
+                        resize:vertical;
+                    "
+                >${safe(venda.descricao || "")}</textarea>
+
+            </div>
+
+
+            <div style="margin-bottom:20px;">
+
+                <label>
+                    Valor total da venda
+                </label>
+
+                <input
+                    id="editarVendaValor"
+                    type="text"
+                    inputmode="decimal"
+                    value="${valor}"
+                    style="
+                        width:100%;
+                        margin-top:6px;
+                    "
+                >
+
+            </div>
+
+
+            <div
+                style="
+                    display:flex;
+                    gap:10px;
+                    justify-content:flex-end;
+                "
+            >
+
+                <button
+                    type="button"
+                    class="btn btn-ghost"
+                    onclick="fecharModalEditarVenda()"
+                >
+                    Cancelar
+                </button>
+
+                <button
+                    type="button"
+                    class="btn btn-primary"
+                    onclick="salvarEdicaoVenda('${venda.id}')"
+                >
+                    Salvar alterações
+                </button>
+
+            </div>
+
+        </div>
+    `;
+
+    document.body.appendChild(modal);
+
+
+    /* Fecha clicando fora */
+
+    modal.addEventListener(
+        "click",
+        function(event) {
+
+            if (event.target === modal) {
+                fecharModalEditarVenda();
+            }
+
+        }
+    );
+
+}
+
+
+/* =====================================================
+   FECHAR MODAL DE VENDA
+===================================================== */
+
+function fecharModalEditarVenda() {
+
+    const modal =
+        document.getElementById(
+            "modalEditarVenda"
+        );
+
+    if (modal) {
+        modal.remove();
+    }
+
+}
+
+/* =====================================================
+   SALVAR EDIÇÃO DA VENDA
+===================================================== */
+
+async function salvarEdicaoVenda(id) {
+
+    try {
+
+        const campoDescricao =
+            document.getElementById(
+                "editarVendaDescricao"
+            );
+
+        const campoValor =
+            document.getElementById(
+                "editarVendaValor"
+            );
+
+
+        if (
+            !campoDescricao ||
+            !campoValor
+        ) {
+
+            alert(
+                "Não foi possível localizar os campos da venda."
+            );
+
+            return;
+        }
+
+
+        /* =========================================
+           PEGAR VALORES
+        ========================================= */
+
+        const descricao =
+            campoDescricao.value.trim();
+
+        const valor =
+            Number(
+                String(campoValor.value)
+                    .replace(/\./g, "")
+                    .replace(",", ".")
+            );
+
+
+        /* =========================================
+           VALIDAÇÕES
+        ========================================= */
+
+        if (!descricao) {
+
+            alert(
+                "Informe a descrição da venda."
+            );
+
+            campoDescricao.focus();
+
+            return;
+        }
+
+
+        if (
+            !Number.isFinite(valor) ||
+            valor < 0
+        ) {
+
+            alert(
+                "Informe um valor válido."
+            );
+
+            campoValor.focus();
+
+            return;
+        }
+
+
+        /* =========================================
+           ATUALIZAR VENDA
+        ========================================= */
+
+        /* =========================================
+           BUSCAR PARCELAS ATUAIS DA VENDA
+        ========================================= */
+
+        const { data: parcelasVenda, error: erroParcelas } =
+            await supabaseClient
+                .from("parcelas")
+                .select("*")
+                .eq("venda_id", id)
+                .order("numero", {
+                    ascending: true
+                });
+
+
+        if (erroParcelas) {
+            throw erroParcelas;
+        }
+
+        /* =========================================
+           ATUALIZAR PARCELAS EM ABERTO
+        ========================================= */
+
+        const parcelasAbertas = (parcelasVenda || []).filter((p) => {
+            const valor = Number(p.valor || 0);
+            const pago = Number(p.valor_pago || 0);
+
+            return Math.max(0, valor - pago) > 0;
+        });
+
+        if (parcelasAbertas.length > 0) {
+
+            const totalPago = (parcelasVenda || []).reduce(
+                (sum, p) => sum + Number(p.valor_pago || 0),
+                0
+            );
+
+            const novoSaldo = Math.max(
+                0,
+                novoValor - totalPago
+            );
+
+            const valorBase =
+                novoSaldo / parcelasAbertas.length;
+
+            let acumulado = 0;
+
+            for (let i = 0; i < parcelasAbertas.length; i++) {
+
+                const parcela = parcelasAbertas[i];
+
+                let novoValorParcela;
+
+                if (i === parcelasAbertas.length - 1) {
+                    novoValorParcela =
+                        Math.round(
+                            (novoSaldo - acumulado) * 100
+                        ) / 100;
+                } else {
+                    novoValorParcela =
+                        Math.round(valorBase * 100) / 100;
+
+                    acumulado += novoValorParcela;
+                }
+
+                const pago = Number(parcela.valor_pago || 0);
+
+                const novoStatus =
+                    pago >= novoValorParcela
+                        ? "paga"
+                        : (
+                            new Date(parcela.vencimento) <
+                            new Date().setHours(0, 0, 0, 0)
+                                ? "atrasada"
+                                : "pendente"
+                        );
+
+                const { error: erroAtualizacao } =
+                    await supabaseClient
+                        .from("parcelas")
+                        .update({
+                            valor: novoValorParcela,
+                            status: novoStatus
+                        })
+                        .eq("id", parcela.id);
+
+                if (erroAtualizacao) {
+                    throw erroAtualizacao;
+                }
+            }
+        }
+
+        const { data: vendaAtualizada, error } =
+            await supabaseClient
+                .from("vendas")
+                .update({
+
+                    descricao:
+                        descricao,
+
+                    valor_total:
+                        valor
+
+                })
+                .eq("id", id)
+                .select()
+                .single();
+
+
+        if (error) {
+            throw error;
+        }
+
+
+        /* =========================================
+           FECHAR MODAL
+        ========================================= */
+
+        fecharModalEditarVenda();
+
+
+        alert(
+            "Venda atualizada com sucesso!"
+        );
+
+
+        /* =========================================
+           ATUALIZAR A FICHA DO CLIENTE
+        ========================================= */
+
+        if (
+            vendaAtualizada &&
+            vendaAtualizada.cliente_id
+        ) {
+
+            await viewClient(
+                vendaAtualizada.cliente_id
+            );
+
+        }
+
+
+    } catch (erro) {
+
+        console.error(
+            "Erro ao salvar venda:",
+            erro
+        );
+
+        alert(
+            "Não foi possível salvar a venda.\n\n" +
             (erro.message || erro)
         );
 
