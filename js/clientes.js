@@ -2185,9 +2185,36 @@ async function viewClient(id) {
                                         </td>
 
                                         <td>
+
                                             ${fmtMoney(
-                                                p.valor
+                                                Math.max(
+                                                    0,
+                                                    Number(p.valor || 0) -
+                                                    Number(p.valor_pago || 0)
+                                                )
                                             )}
+
+                                            ${
+                                                Number(p.valor_pago || 0) > 0 &&
+                                                Number(p.valor_pago || 0) <
+                                                Number(p.valor || 0)
+                                                    ? `
+                                                        <div
+                                                            style="
+                                                                font-size:11px;
+                                                                color:var(--muted);
+                                                                margin-top:4px;
+                                                            "
+                                                        >
+                                                            Pago:
+                                                            ${fmtMoney(
+                                                                Number(p.valor_pago || 0)
+                                                            )}
+                                                        </div>
+                                                    `
+                                                    : ''
+                                            }
+
                                         </td>
 
                                         <td>
@@ -2204,17 +2231,7 @@ async function viewClient(id) {
                                             )}
                                         </td>
 
-                                        <td>
-
-                                            <button
-                                                type="button"
-                                                class="btn btn-ghost"
-                                                onclick="editInstallment('${p.id}')"
-                                            >
-                                                Editar
-                                            </button>
-
-                                        </td>
+                                        
                                         <td>
                                             <button
                                                 type="button"
