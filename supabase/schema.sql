@@ -37,6 +37,7 @@ create table if not exists public.vendas (
   vendedor uuid null,
   observacoes text null,
   criado_em timestamptz not null default now(),
+  itens_json jsonb not null default '[]'::jsonb,
 
   constraint vendas_cliente_id_fkey
     foreign key (cliente_id)

@@ -356,6 +356,10 @@ function renderSales() {
                        recebe o botão Excluir.
                     */
 
+                    const botaoImprimir = `
+                        <button class="btn btn-ghost print-sale-row" data-id="${sale.id}" type="button">Imprimir</button>
+                    `;
+
                     const botaoExcluir =
                         typeof isAdmin ===
                             'function' &&
@@ -422,7 +426,7 @@ function renderSales() {
                             </td>
 
                             <td>
-                                ${botaoExcluir}
+                                <div style="display:flex;gap:6px;flex-wrap:wrap">${botaoImprimir}${botaoExcluir}</div>
                             </td>
 
                         </tr>
@@ -442,6 +446,17 @@ function renderSales() {
             </tr>
         `;
 
+
+    /* =====================================================
+       IMPRIMIR COMPROVANTE
+       ===================================================== */
+
+    document.querySelectorAll('.print-sale-row').forEach(button => {
+        button.onclick = () => {
+            const sale = sales.find(item => String(item.id) === String(button.dataset.id));
+            if (sale && typeof printSaleReceipt === 'function') printSaleReceipt(sale);
+        };
+    });
 
     /* =====================================================
        BOTÕES DE EXCLUIR

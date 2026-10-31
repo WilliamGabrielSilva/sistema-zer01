@@ -600,7 +600,12 @@ document
           data_venda: today,
           status: isCredit ? 'aberta' : 'finalizada',
           forma_pagamento: isCredit ? 'crediario' : paymentMethod,
-          observacoes
+          observacoes,
+          itens_json: items.map(item => ({
+            descricao: String(item.descricao || '').trim() || 'Item sem descrição',
+            quantidade: Number(item.quantidade) || 1,
+            valor: Number(item.valor) || 0
+          })).filter(item => item.descricao !== 'Item sem descrição' || item.valor > 0)
         })
         .select()
         .single()
@@ -608,6 +613,7 @@ document
 
       if (!sale?.id) throw new Error('A venda não foi criada corretamente.');
 
+      let receiptInstallments = [];
       if (isCredit) {
         const rows = installmentValues.map((value, index) => ({
           venda_id: sale.id,
@@ -617,6 +623,7 @@ document
           status: 'pendente'
         }));
         await supabaseQuery(client => client.from('parcelas').insert(rows));
+        receiptInstallments = rows;
       } else {
         // Uma parcela quitada mantém a venda à vista integrada aos relatórios e ao histórico.
         const parcela = await supabaseQuery(client => client
@@ -635,6 +642,7 @@ document
         );
 
         if (!parcela?.id) throw new Error('Venda criada, mas não foi possível registrar a quitação. Confira a venda antes de tentar novamente.');
+        receiptInstallments = [{ numero: 1, valor: saleTotal, valor_pago: saleTotal, vencimento: today, status: 'paga' }];
 
         const paymentFormMap = {
           pix: 'pix',
@@ -653,6 +661,12 @@ document
         }));
       }
 
+      const receiptSale = {
+        ...sale,
+        cliente_nome: clients.find(client => String(client.id) === String(clienteId))?.nome || null,
+        itens_json: items.map(item => ({ descricao: String(item.descricao || '').trim() || 'Item sem descrição', quantidade: Number(item.quantidade) || 1, valor: Number(item.valor) || 0 })).filter(item => item.descricao !== 'Item sem descrição' || item.valor > 0),
+        parcelas: receiptInstallments
+      };
       toast(isCredit ? 'Venda e parcelas salvas no Supabase.' : 'Venda à vista registrada e marcada como paga.');
       event.target.reset();
       document.getElementById('sale-type').value = 'avista';
@@ -661,6 +675,7 @@ document
       renderItems();
       syncSaleMode();
       renderTotal();
+      if (typeof offerSaleReceipt === 'function') offerSaleReceipt(receiptSale);
     } catch (error) {
       console.error('Erro ao salvar venda:', error);
       toast(error?.message || 'Erro ao salvar a venda.', 'error');

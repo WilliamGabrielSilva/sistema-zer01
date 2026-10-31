@@ -20,3 +20,9 @@ alter table public.vendas
 
 -- Valores usados em vendas.forma_pagamento:
 -- crediario, dinheiro, pix, cartao_debito, cartao_credito, transferencia
+
+
+-- Snapshot dos itens vendidos para que o comprovante possa ser reimpresso
+-- com descrição, quantidade e valor unitário, mesmo depois da venda.
+alter table public.vendas
+  add column if not exists itens_json jsonb not null default '[]'::jsonb;

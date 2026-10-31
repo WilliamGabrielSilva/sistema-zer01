@@ -30,3 +30,11 @@ As credenciais precisam ser preenchidas antes de usar o sistema. O frontend não
 - **Sistema já em uso:** execute `supabase/migration_vendas_a_vista.sql` no SQL Editor do Supabase antes de publicar os arquivos atualizados. A migração permite `cliente_id` nulo e adiciona `vendas.forma_pagamento`, sem apagar as vendas existentes.
 - Na tela **Nova venda**, selecione **À vista** para escolher dinheiro, PIX, cartão de débito, cartão de crédito à vista ou transferência. O cliente é opcional e a venda fica quitada no histórico.
 - Selecione **Crediário / fiado** para exigir um cliente e configurar as parcelas como antes.
+
+## Comprovantes de venda (impressora térmica 58 mm)
+
+O sistema permite imprimir um comprovante interno, não fiscal, para vendas à vista e no crediário. Após salvar uma venda, use **Imprimir comprovante**; no histórico, o botão **Imprimir** permite emitir uma segunda via. O layout é otimizado para bobina de 58 mm. Para funcionar, permita pop-ups/impressão no navegador.
+
+Antes de usar a versão atualizada, execute no SQL Editor do Supabase o arquivo `supabase/migration_vendas_a_vista.sql`. A migração inclui `itens_json`, que guarda uma cópia dos itens, quantidades e valores para permitir a reimpressão do comprovante. Vendas antigas sem esse snapshot continuarão imprimindo o resumo textual já salvo.
+
+**Importante:** este comprovante é apenas um registro interno e não substitui NFC-e ou outro documento fiscal obrigatório.
