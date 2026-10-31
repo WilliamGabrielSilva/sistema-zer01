@@ -428,6 +428,8 @@ async function init() {
 
   });
 
+  syncSaleMode();
+
 }
 
 
@@ -475,406 +477,197 @@ document
 
 
 /* =========================================================
+   MODALIDADE DA VENDA
+   ========================================================= */
+
+function syncSaleMode() {
+  const mode = document.getElementById('sale-type')?.value || 'avista';
+  const isCredit = mode === 'crediario';
+  const clientSelect = document.getElementById('sale-client');
+  const clientMark = document.getElementById('client-required-mark');
+  const clientHelp = document.getElementById('client-help');
+  const paymentField = document.getElementById('payment-method-field');
+  const paymentSelect = document.getElementById('payment-method');
+  const installmentSettings = document.getElementById('installment-settings');
+  const paidNote = document.getElementById('paid-sale-note');
+  const title = document.getElementById('payment-panel-title');
+  const submit = document.querySelector('#sale-form button[type="submit"]');
+
+  if (clientSelect) clientSelect.required = isCredit;
+  if (clientMark) clientMark.hidden = !isCredit;
+  if (clientHelp) clientHelp.textContent = isCredit
+    ? 'Obrigatório para controlar o crediário e as parcelas.'
+    : 'Opcional para vendas à vista.';
+  if (paymentField) paymentField.hidden = isCredit;
+  if (paymentSelect) paymentSelect.required = !isCredit;
+  if (installmentSettings) installmentSettings.hidden = !isCredit;
+  if (paidNote) paidNote.hidden = isCredit;
+  if (title) title.textContent = isCredit ? 'Parcelamento' : 'Pagamento';
+  if (submit) submit.textContent = isCredit ? 'Salvar venda e parcelas' : 'Finalizar venda';
+
+  renderInstallments();
+}
+
+document.getElementById('sale-type')?.addEventListener('change', syncSaleMode);
+
+
+/* =========================================================
    SALVAR VENDA
    ========================================================= */
 
 document
   .getElementById('sale-form')
-  ?.addEventListener(
-    'submit',
-    async event => {
-
-      event.preventDefault();
-
-
-      try {
-
-
-        /* -------------------------------------------------
-           CLIENTE
-           ------------------------------------------------- */
-
-        const clienteId =
-          document
-            .getElementById(
-              'sale-client'
-            )
-            ?.value;
-
-
-        if (!clienteId) {
-
-          toast(
-            'Selecione um cliente.',
-            'error'
-          );
-
-          return;
-
-        }
-
-
-        /* -------------------------------------------------
-           TOTAL DA VENDA
-           ------------------------------------------------- */
-
-        const saleTotal =
-          total();
-
-
-        if (saleTotal <= 0) {
-
-          toast(
-            'Adicione pelo menos um item com valor válido.',
-            'error'
-          );
-
-          return;
-
-        }
-
-
-        /* -------------------------------------------------
-           QUANTIDADE DE PARCELAS
-           ------------------------------------------------- */
-
-        const installmentCount =
-          Number(
-            document.getElementById(
-              'installment-count'
-            )?.value
-          );
-
-
-        if (
-          !Number.isInteger(installmentCount) ||
-          installmentCount < 1
-        ) {
-
-          toast(
-            'Informe uma quantidade válida de parcelas.',
-            'error'
-          );
-
-          return;
-
-        }
-
-
-        /* -------------------------------------------------
-           CAMPOS DAS PARCELAS
-           ------------------------------------------------- */
-
-        const installmentInputs = [
-          ...document.querySelectorAll(
-            '.installment-value'
-          )
-        ];
-
-
-        const dateInputs = [
-          ...document.querySelectorAll(
-            '.installment-date'
-          )
-        ];
-
-
-        if (
-          installmentInputs.length !==
-          installmentCount
-        ) {
-
-          toast(
-            'Erro ao gerar as parcelas. Tente novamente.',
-            'error'
-          );
-
-          return;
-
-        }
-
-
-        /* -------------------------------------------------
-           VALORES
-           ------------------------------------------------- */
-
-        const installmentValues =
-          installmentInputs.map(input => {
-
-            const value =
-              Number(input.value);
-
-
-            return Number.isFinite(value)
-              ? value
-              : 0;
-
-          });
-
-
-        /* -------------------------------------------------
-           VERIFICAR VALORES
-           ------------------------------------------------- */
-
-        const invalidValue =
-          installmentValues.some(
-            value =>
-              value < 0
-          );
-
-
-        if (invalidValue) {
-
-          toast(
-            'O valor das parcelas não pode ser negativo.',
-            'error'
-          );
-
-          return;
-
-        }
-
-
-        /* -------------------------------------------------
-           SOMA DAS PARCELAS
-           ------------------------------------------------- */
-
-        const installmentsTotal =
-          installmentValues.reduce(
-            (sum, value) =>
-              sum + value,
-            0
-          );
-
-
-        /*
-         * Converte os dois valores para centavos.
-         */
-
-        const saleCents =
-          Math.round(
-            saleTotal * 100
-          );
-
-
-        const installmentsCents =
-          Math.round(
-            installmentsTotal * 100
-          );
-
-
-        /* -------------------------------------------------
-           CONFERIR SE FECHA A VENDA
-           ------------------------------------------------- */
-
-        if (
-          saleCents !==
-          installmentsCents
-        ) {
-
-          toast(
-            `A soma das parcelas (${fmtMoney(
-              installmentsTotal
-            )}) precisa ser igual ao total da venda (${fmtMoney(
-              saleTotal
-            )}).`,
-            'error'
-          );
-
-          return;
-
-        }
-
-
-        /* -------------------------------------------------
-           VERIFICAR DATAS
-           ------------------------------------------------- */
-
-        const invalidDate =
-          dateInputs.some(
-            input =>
-              !input.value
-          );
-
-
-        if (invalidDate) {
-
-          toast(
-            'Informe o vencimento de todas as parcelas.',
-            'error'
-          );
-
-          return;
-
-        }
-
-
-        /* -------------------------------------------------
-           DESCRIÇÃO DOS ITENS
-           ------------------------------------------------- */
-
-        const descricao =
-          items
-            .map(item =>
-              item.descricao
-            )
-            .filter(
-              descricao =>
-                descricao &&
-                descricao.trim()
-            )
-            .join(' / ');
-
-
-        /* -------------------------------------------------
-           OBSERVAÇÕES
-           ------------------------------------------------- */
-
-        const observacoes =
-          document.getElementById(
-            'sale-notes'
-          )?.value || null;
-
-
-        /* -------------------------------------------------
-           SALVAR VENDA
-           ------------------------------------------------- */
-
-        const sale =
-          await supabaseQuery(
-            client =>
-              client
-                .from('vendas')
-                .insert({
-
-                  cliente_id:
-                    clienteId,
-
-                  descricao:
-                    descricao || null,
-
-                  valor_total:
-                    saleTotal,
-
-                  quantidade_parcelas:
-                    installmentCount,
-
-                  data_venda:
-                    todayISO(),
-
-                  status:
-                    'aberta',
-
-                  observacoes:
-                    observacoes
-
-                })
-                .select()
-                .single()
-          );
-
-
-        if (!sale || !sale.id) {
-
-          throw new Error(
-            'A venda não foi criada corretamente.'
-          );
-
-        }
-
-
-        /* -------------------------------------------------
-           MONTAR PARCELAS
-           ------------------------------------------------- */
-
-        const rows =
-          installmentValues.map(
-            (value, index) => {
-
-              return {
-
-                venda_id:
-                  sale.id,
-
-                numero:
-                  index + 1,
-
-                valor:
-                  value,
-
-                vencimento:
-                  dateInputs[index].value,
-
-                status:
-                  'pendente'
-
-              };
-
-            }
-          );
-
-
-        /* -------------------------------------------------
-           SALVAR PARCELAS
-           ------------------------------------------------- */
-
-        await supabaseQuery(
-          client =>
-            client
-              .from('parcelas')
-              .insert(rows)
-        );
-
-
-        /* -------------------------------------------------
-           SUCESSO
-           ------------------------------------------------- */
-
-        toast(
-          'Venda e parcelas salvas no Supabase.'
-        );
-
-
-        /* -------------------------------------------------
-           LIMPAR FORMULÁRIO
-           ------------------------------------------------- */
-
-        event.target.reset();
-
-
-        items = [
-          {
-            descricao: '',
-            quantidade: 1,
-            valor: 0
-          }
-        ];
-
-
-        renderItems();
-
-        renderTotal();
-
-
-      } catch (error) {
-
-
-        console.error(
-          'Erro ao salvar venda:',
-          error
-        );
-
-
-        toast(
-          error?.message ||
-          'Erro ao salvar a venda.',
-          'error'
-        );
-
+  ?.addEventListener('submit', async event => {
+    event.preventDefault();
+
+    const submitButton = event.target.querySelector('button[type="submit"]');
+    if (submitButton) submitButton.disabled = true;
+
+    try {
+      const mode = document.getElementById('sale-type')?.value || 'avista';
+      const isCredit = mode === 'crediario';
+      const clienteId = document.getElementById('sale-client')?.value || null;
+      const paymentMethod = document.getElementById('payment-method')?.value || null;
+      const saleTotal = total();
+
+      if (isCredit && !clienteId) {
+        toast('Selecione um cliente para vendas no crediário.', 'error');
+        return;
       }
 
+      if (!isCredit && !paymentMethod) {
+        toast('Selecione a forma de pagamento.', 'error');
+        return;
+      }
+
+      if (saleTotal <= 0) {
+        toast('Adicione pelo menos um item com valor válido.', 'error');
+        return;
+      }
+
+      let installmentValues = [];
+      let dateInputs = [];
+      let installmentCount = 1;
+
+      if (isCredit) {
+        installmentCount = Number(document.getElementById('installment-count')?.value);
+        if (!Number.isInteger(installmentCount) || installmentCount < 1) {
+          toast('Informe uma quantidade válida de parcelas.', 'error');
+          return;
+        }
+
+        const installmentInputs = [...document.querySelectorAll('.installment-value')];
+        dateInputs = [...document.querySelectorAll('.installment-date')];
+        if (installmentInputs.length !== installmentCount || dateInputs.length !== installmentCount) {
+          toast('Erro ao gerar as parcelas. Tente novamente.', 'error');
+          return;
+        }
+
+        installmentValues = installmentInputs.map(input => Number(input.value));
+        if (installmentValues.some(value => !Number.isFinite(value) || value < 0)) {
+          toast('O valor das parcelas precisa ser válido e não pode ser negativo.', 'error');
+          return;
+        }
+
+        const saleCents = Math.round(saleTotal * 100);
+        const installmentsCents = installmentValues.reduce((sum, value) => sum + Math.round(value * 100), 0);
+        if (saleCents !== installmentsCents) {
+          const installmentsTotal = installmentValues.reduce((sum, value) => sum + value, 0);
+          toast(`A soma das parcelas (${fmtMoney(installmentsTotal)}) precisa ser igual ao total da venda (${fmtMoney(saleTotal)}).`, 'error');
+          return;
+        }
+
+        if (dateInputs.some(input => !input.value)) {
+          toast('Informe o vencimento de todas as parcelas.', 'error');
+          return;
+        }
+      }
+
+      const descricao = items
+        .map(item => item.descricao)
+        .filter(value => value && value.trim())
+        .join(' / ');
+      const observacoes = document.getElementById('sale-notes')?.value || null;
+      const today = todayISO();
+
+      const sale = await supabaseQuery(client => client
+        .from('vendas')
+        .insert({
+          cliente_id: clienteId,
+          descricao: descricao || null,
+          valor_total: saleTotal,
+          quantidade_parcelas: installmentCount,
+          data_venda: today,
+          status: isCredit ? 'aberta' : 'finalizada',
+          forma_pagamento: isCredit ? 'crediario' : paymentMethod,
+          observacoes
+        })
+        .select()
+        .single()
+      );
+
+      if (!sale?.id) throw new Error('A venda não foi criada corretamente.');
+
+      if (isCredit) {
+        const rows = installmentValues.map((value, index) => ({
+          venda_id: sale.id,
+          numero: index + 1,
+          valor: value,
+          vencimento: dateInputs[index].value,
+          status: 'pendente'
+        }));
+        await supabaseQuery(client => client.from('parcelas').insert(rows));
+      } else {
+        // Uma parcela quitada mantém a venda à vista integrada aos relatórios e ao histórico.
+        const parcela = await supabaseQuery(client => client
+          .from('parcelas')
+          .insert({
+            venda_id: sale.id,
+            numero: 1,
+            valor: saleTotal,
+            vencimento: today,
+            status: 'paga',
+            data_pagamento: today,
+            valor_pago: saleTotal
+          })
+          .select('id')
+          .single()
+        );
+
+        if (!parcela?.id) throw new Error('Venda criada, mas não foi possível registrar a quitação. Confira a venda antes de tentar novamente.');
+
+        const paymentFormMap = {
+          pix: 'pix',
+          dinheiro: 'dinheiro',
+          cartao_debito: 'cartao',
+          cartao_credito: 'cartao',
+          transferencia: 'outros'
+        };
+
+        await supabaseQuery(client => client.from('pagamentos').insert({
+          parcela_id: parcela.id,
+          valor: saleTotal,
+          data_pagamento: today,
+          forma_pagamento: paymentFormMap[paymentMethod] || 'outros',
+          status: 'confirmado'
+        }));
+      }
+
+      toast(isCredit ? 'Venda e parcelas salvas no Supabase.' : 'Venda à vista registrada e marcada como paga.');
+      event.target.reset();
+      document.getElementById('sale-type').value = 'avista';
+      document.getElementById('installment-count').value = '1';
+      items = [{ descricao: '', quantidade: 1, valor: 0 }];
+      renderItems();
+      syncSaleMode();
+      renderTotal();
+    } catch (error) {
+      console.error('Erro ao salvar venda:', error);
+      toast(error?.message || 'Erro ao salvar a venda.', 'error');
+    } finally {
+      if (submitButton) submitButton.disabled = false;
     }
-  );
+  });
 
 
 /* =========================================================

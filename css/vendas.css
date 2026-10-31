@@ -1,1 +1,25 @@
 /* Cofre Urbano — estilos específicos de vendas. */
+
+/* Campos condicionais do fluxo de venda à vista/crediário. */
+#payment-method-field[hidden],
+#installment-settings[hidden],
+#paid-sale-note[hidden],
+#client-required-mark[hidden] {
+  display: none !important;
+}
+
+#client-help {
+  display: block;
+  margin-top: 6px;
+  color: var(--muted, #777);
+  font-size: 12px;
+}
+
+#paid-sale-note {
+  padding: 12px 14px;
+  border: 1px solid var(--line, #ddd);
+  border-radius: 10px;
+  color: var(--muted, #777);
+  font-size: 13px;
+  line-height: 1.5;
+}

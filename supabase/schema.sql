@@ -27,10 +27,11 @@ create table if not exists public.clientes (
 -- ============================================================
 create table if not exists public.vendas (
   id uuid primary key default gen_random_uuid(),
-  cliente_id uuid not null,
+  cliente_id uuid null,
   descricao text null,
   valor_total numeric(12, 2) not null default 0,
   quantidade_parcelas integer not null default 1,
+  forma_pagamento text not null default 'crediario',
   data_venda date not null default current_date,
   status text not null default 'aberta',
   vendedor uuid null,
@@ -41,7 +42,7 @@ create table if not exists public.vendas (
     foreign key (cliente_id)
     references public.clientes(id)
     on update cascade
-    on delete cascade,
+    on delete set null,
 
   constraint vendas_vendedor_fkey
     foreign key (vendedor)
@@ -137,7 +138,7 @@ alter table public.pagamentos add constraint pagamentos_parcela_id_fkey foreign 
 alter table public.parcelas drop constraint if exists parcelas_venda_id_fkey;
 alter table public.parcelas add constraint parcelas_venda_id_fkey foreign key (venda_id) references public.vendas(id) on update cascade on delete cascade;
 alter table public.vendas drop constraint if exists vendas_cliente_id_fkey;
-alter table public.vendas add constraint vendas_cliente_id_fkey foreign key (cliente_id) references public.clientes(id) on update cascade on delete cascade;
+alter table public.vendas add constraint vendas_cliente_id_fkey foreign key (cliente_id) references public.clientes(id) on update cascade on delete set null;
 
 -- ============================================================
 -- ÍNDICES PARA BUSCA E RELATÓRIOS

@@ -23,3 +23,10 @@ Nunca coloque a `service_role key`, senha, token privado ou credencial bancária
 | Banco | `supabase/schema.sql` |
 
 As credenciais precisam ser preenchidas antes de usar o sistema. O frontend não usa `localStorage` como banco alternativo: sem uma URL e uma chave pública válidas, as consultas e gravações são bloqueadas e uma mensagem de erro é exibida. Depois da configuração, clientes, vendas, parcelas, pagamentos, dashboard e relatórios consultam diretamente as tabelas do Supabase.
+
+## Atualização: vendas à vista
+
+- **Instalação nova:** execute `supabase/schema.sql` normalmente.
+- **Sistema já em uso:** execute `supabase/migration_vendas_a_vista.sql` no SQL Editor do Supabase antes de publicar os arquivos atualizados. A migração permite `cliente_id` nulo e adiciona `vendas.forma_pagamento`, sem apagar as vendas existentes.
+- Na tela **Nova venda**, selecione **À vista** para escolher dinheiro, PIX, cartão de débito, cartão de crédito à vista ou transferência. O cliente é opcional e a venda fica quitada no histórico.
+- Selecione **Crediário / fiado** para exigir um cliente e configurar as parcelas como antes.

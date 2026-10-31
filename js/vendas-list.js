@@ -6,6 +6,20 @@
 
 let sales = [];
 
+function paymentMethodLabel(method) {
+    const labels = {
+        crediario: 'Crediário / fiado',
+        dinheiro: 'Dinheiro',
+        pix: 'PIX',
+        cartao_debito: 'Cartão de débito',
+        cartao_credito: 'Cartão de crédito à vista',
+        transferencia: 'Transferência bancária',
+        cartao: 'Cartão',
+        outros: 'Outros'
+    };
+    return labels[method] || '—';
+}
+
 
 /* =========================================================
    CARREGAR VENDAS
@@ -258,7 +272,8 @@ function renderSales() {
                 const correspondePesquisa =
                     [
                         sale.descricao,
-                        sale.clientes?.nome
+                        sale.clientes?.nome,
+                        sale.forma_pagamento
                     ].some(
                         (value) =>
                             safe(value)
@@ -364,7 +379,7 @@ function renderSales() {
                             <td>
                                 <strong>
                                     ${display(
-                                        sale.clientes?.nome
+                                        sale.clientes?.nome || 'Venda sem identificação'
                                     )}
                                 </strong>
                             </td>
@@ -379,6 +394,10 @@ function renderSales() {
                                 ${fmtMoney(
                                     sale.valor_total
                                 )}
+                            </td>
+
+                            <td>
+                                ${display(paymentMethodLabel(sale.forma_pagamento))}
                             </td>
 
                             <td>
@@ -415,7 +434,7 @@ function renderSales() {
         `
             <tr>
                 <td
-                    colspan="7"
+                    colspan="8"
                     class="empty"
                 >
                     Nenhuma venda encontrada.
@@ -544,7 +563,7 @@ loadSales()
                 tabela.innerHTML = `
                     <tr>
                         <td
-                            colspan="7"
+                            colspan="8"
                             class="empty"
                         >
                             Configure o Supabase para carregar vendas.
