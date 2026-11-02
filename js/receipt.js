@@ -72,6 +72,10 @@
       .total-row > * { min-width: 0; overflow-wrap: anywhere; }
       .installment { display: flex; justify-content: space-between; align-items: flex-start; gap: 2px; font-size: 9px; margin: 3px 0; }
       .installment > * { min-width: 0; overflow-wrap: anywhere; }
+      .total-row > strong,
+      .installment > strong,
+      .item-detail > strong,
+      .meta > strong {white-space: nowrap; flex-shrink: 0;}
       .footer { text-align: center; font-size: 8px; margin-top: 7px; overflow-wrap: anywhere; }
       .status { text-align: center; font-weight: bold; font-size: 11px; margin: 5px 0; padding: 3px; border: 1px solid #111; }
       @media print {
