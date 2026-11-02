@@ -41,8 +41,46 @@
     const created = sale.criado_em || sale.created_at;
     const dateText = created ? new Date(created).toLocaleString('pt-BR') : dateBR(sale.data_venda);
     return `<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Comprovante Zer01</title><style>
-      @page{size:58mm auto;margin:3mm}*{box-sizing:border-box}body{font:12px/1.4 Arial,sans-serif;color:#111;width:52mm;margin:0 auto}h1{font-size:20px;text-align:center;margin:0;letter-spacing:1px} .subtitle{text-align:center;font-size:8px;line-height:1.35;letter-spacing:.35px;margin-bottom:8px}.center{text-align:center}.muted{color:#555;font-size:10px}.rule{border-top:1px dashed #555;margin:8px 0}.meta{display:flex;justify-content:space-between;gap:8px;margin:3px 0}.section-title{font-weight:bold;margin:7px 0}.item{margin:7px 0}.item-name{overflow-wrap:anywhere}.item-detail{display:flex;justify-content:space-between;gap:4px;font-size:11px}.total-row{display:flex;justify-content:space-between;gap:8px;font-size:14px;font-weight:bold;margin-top:8px}.installment{display:flex;justify-content:space-between;gap:4px;font-size:10px;margin:4px 0}.footer{text-align:center;font-size:10px;margin-top:12px}.status{text-align:center;font-weight:bold;font-size:14px;margin:8px 0;padding:5px;border:1px solid #111}
-      </style></head><body><h1>ZER01</h1><div class="subtitle">MODA MASCULINA<br>COMPROVANTE DE VENDA</div><div class="rule"></div><div class="meta"><span>Venda</span><strong>#${escape(String(sale.id || '').slice(0, 8).toUpperCase() || '—')}</strong></div><div class="meta"><span>Data</span><span>${escape(dateText)}</span></div><div class="meta"><span>Cliente</span><span>${escape(sale.clientes?.nome || sale.cliente_nome || 'Não identificado')}</span></div><div class="rule"></div><div class="section-title">ITENS</div>${itemRows(sale)}<div class="rule"></div><div class="total-row"><span>TOTAL</span><strong>${money(sale.valor_total)}</strong></div><div class="meta" style="margin-top:7px"><span>Pagamento</span><strong>${escape(methodLabels[sale.forma_pagamento] || sale.forma_pagamento || '—')}</strong></div><div class="status">${isCredit ? 'VENDA NO CREDIÁRIO' : 'PAGO'}</div>${installmentsHTML}<div class="rule"></div><div class="footer"><div class="store-address">Avenida Inglaterra, 626<br>Londrina/PR</div><br>Este documento é um comprovante interno,<br>não é documento fiscal.<br><br>Obrigado pela preferência!<br>ZER01</div><script>window.addEventListener('load',()=>{setTimeout(()=>window.print(),250)});window.addEventListener('afterprint',()=>setTimeout(()=>window.close(),250));</script></body></html>`;
+      @page { size: 58mm auto; margin: 0; }
+      * { box-sizing: border-box; }
+      html, body { margin: 0; padding: 0; width: 58mm; min-width: 0; }
+      body {
+        font: 10px/1.3 Arial, sans-serif;
+        color: #111;
+        padding: 0 5mm;
+        overflow-wrap: anywhere;
+        word-break: normal;
+      }
+      h1 { font-size: 17px; text-align: center; margin: 0; letter-spacing: 1px; }
+      .subtitle { text-align: center; font-size: 8px; line-height: 1.25; letter-spacing: .2px; margin-bottom: 5px; }
+      .center { text-align: center; }
+      .muted { color: #555; font-size: 9px; }
+      .rule { border-top: 1px dashed #555; margin: 5px 0; }
+      .meta { display: flex; justify-content: space-between; align-items: flex-start; gap: 2px; margin: 2px 0; min-width: 0; }
+      .meta > * { min-width: 0; max-width: 100%; overflow-wrap: anywhere; }
+      .meta > span:last-child, .meta > strong:last-child { text-align: right; }
+      .section-title { font-weight: bold; margin: 5px 0; }
+      .item { margin: 5px 0; }
+      .item-name { overflow-wrap: anywhere; word-break: break-word; }
+      .item-detail { display: flex; justify-content: space-between; align-items: flex-start; gap: 2px; font-size: 9px; }
+      .item-detail > * { min-width: 0; overflow-wrap: anywhere; }
+      .total-row { display: flex; justify-content: space-between; align-items: flex-start; gap: 2px; font-size: 12px; font-weight: bold; margin-top: 5px; }
+      .total-row > * { min-width: 0; overflow-wrap: anywhere; }
+      .installment { display: flex; justify-content: space-between; align-items: flex-start; gap: 2px; font-size: 9px; margin: 3px 0; }
+      .installment > * { min-width: 0; overflow-wrap: anywhere; }
+      .footer { text-align: center; font-size: 8px; margin-top: 7px; overflow-wrap: anywhere; }
+      .status { text-align: center; font-weight: bold; font-size: 11px; margin: 5px 0; padding: 3px; border: 1px solid #111; }
+      @media print {
+        @page { size: 58mm auto; margin: 0; }
+        html, body { margin: 0 !important; padding: 0 !important; width: 58mm !important; min-width: 0 !important; }
+        body { padding: 0 5mm !important; }
+      }
+    </style></head><body><h1>ZER01</h1><div class="subtitle">MODA MASCULINA<br>COMPROVANTE DE VENDA</div><div class="rule"></div><div class="meta"><span>Venda</span><strong>#${escape(String(sale.id || '').slice(0, 8).toUpperCase() || '—')}</strong></div><div class="meta"><span>Data</span><span>${escape(dateText)}</span></div><div class="meta"><span>Cliente</span><span>${escape(sale.clientes?.nome || sale.cliente_nome || 'Não identificado')}</span></div><div class="rule"></div><div class="section-title">ITENS</div>${itemRows(sale)}<div class="rule"></div><div class="total-row"><span>TOTAL</span><strong>${money(sale.valor_total)}</strong></div><div class="meta" style="margin-top:7px"><span>Pagamento</span><strong>${escape(methodLabels[sale.forma_pagamento] || sale.forma_pagamento || '—')}</strong></div><div class="status">${isCredit ? 'VENDA NO CREDIÁRIO' : 'PAGO'}</div>${installmentsHTML}<div class="rule"></div><div class="footer"><div class="store-address">Avenida Inglaterra, 626<br>Londrina/PR</div><br>Este documento é um comprovante interno,<br>não é documento fiscal.<br><br>Obrigado pela preferência!<br>ZER01</div><script>
+      window.addEventListener('load', () => {
+        setTimeout(() => window.print(), 300);
+      });
+      window.addEventListener('afterprint', () => setTimeout(() => window.close(), 250));
+    </script></body></html>`;
   }
 
   window.printSaleReceipt = function (sale) {
