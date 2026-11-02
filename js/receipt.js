@@ -42,7 +42,7 @@
     const dateText = created ? new Date(created).toLocaleString('pt-BR') : dateBR(sale.data_venda);
     return `<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Comprovante Zer01</title><style>
       :root {
-        --largura: 44mm; /* área realmente impressa pela OIA-8383 (testada: corta perto de 45mm) */
+        --largura: 47mm; /* área realmente impressa pela OIA-8383 (testada: corta perto de 45mm) */
         --margem: 1.5mm;
       }
       @page { size: 58mm auto; margin: 0; }
