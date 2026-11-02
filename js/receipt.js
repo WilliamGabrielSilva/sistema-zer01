@@ -41,13 +41,14 @@
     const created = sale.criado_em || sale.created_at;
     const dateText = created ? new Date(created).toLocaleString('pt-BR') : dateBR(sale.data_venda);
     return `<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Comprovante Zer01</title><style>
+      :root { --margem: 7mm; } /* margem de segurança: aumente (8mm, 9mm) se ainda cortar */
       @page { size: 58mm auto; margin: 0; }
       * { box-sizing: border-box; }
       html, body { margin: 0; padding: 0; width: 58mm; min-width: 0; }
       body {
         font: 10px/1.3 Arial, sans-serif;
         color: #111;
-        padding: 0 5mm;
+        padding: 0 var(--margem);
         overflow-wrap: anywhere;
         word-break: normal;
       }
@@ -73,7 +74,7 @@
       @media print {
         @page { size: 58mm auto; margin: 0; }
         html, body { margin: 0 !important; padding: 0 !important; width: 58mm !important; min-width: 0 !important; }
-        body { padding: 0 5mm !important; }
+        body { padding: 0 var(--margem) !important; }
       }
     </style></head><body><h1>ZER01</h1><div class="subtitle">MODA MASCULINA<br>COMPROVANTE DE VENDA</div><div class="rule"></div><div class="meta"><span>Venda</span><strong>#${escape(String(sale.id || '').slice(0, 8).toUpperCase() || '—')}</strong></div><div class="meta"><span>Data</span><span>${escape(dateText)}</span></div><div class="meta"><span>Cliente</span><span>${escape(sale.clientes?.nome || sale.cliente_nome || 'Não identificado')}</span></div><div class="rule"></div><div class="section-title">ITENS</div>${itemRows(sale)}<div class="rule"></div><div class="total-row"><span>TOTAL</span><strong>${money(sale.valor_total)}</strong></div><div class="meta" style="margin-top:7px"><span>Pagamento</span><strong>${escape(methodLabels[sale.forma_pagamento] || sale.forma_pagamento || '—')}</strong></div><div class="status">${isCredit ? 'VENDA NO CREDIÁRIO' : 'PAGO'}</div>${installmentsHTML}<div class="rule"></div><div class="footer"><div class="store-address">Avenida Inglaterra, 626<br>Londrina/PR</div><br>Este documento é um comprovante interno,<br>não é documento fiscal.<br><br>Obrigado pela preferência!<br>ZER01</div><script>
       window.addEventListener('load', () => {
