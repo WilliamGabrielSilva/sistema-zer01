@@ -1532,22 +1532,11 @@ async function receberParcela(id) {
                     .from('pagamentos')
                     .insert({
 
-                        parcela_id:
-                            parcela.id,
-
-                        venda_id:
-                            parcela.venda_id,
-
-                        cliente_id:
-                            parcela.vendas
-                                ?.cliente_id ||
-                            null,
-
-                        valor:
-                            valorRecebido,
-
-                        data_pagamento:
-                            receberToday()
+                        parcela_id: parcela.id,
+                        valor: valorRecebido,
+                        data_pagamento: receberToday(),
+                        forma_pagamento: 'outros',
+                        status: 'confirmado'
 
                     })
         );

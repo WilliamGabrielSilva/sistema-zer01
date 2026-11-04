@@ -590,6 +590,47 @@ document
       const observacoes = document.getElementById('sale-notes')?.value || null;
       const today = todayISO();
 
+      if (isCredit) {
+        const profile = await supabaseQuery(client => client
+          .from('cliente_score')
+          .select('limite_aprovado')
+          .eq('cliente_id', clienteId)
+          .maybeSingle()
+        );
+
+        if (!profile || profile.limite_aprovado === null) {
+          throw new Error('Este cliente ainda não possui limite aprovado. Acesse o Zer01 Score para realizar a análise.');
+        }
+
+        const openInstallments = await supabaseQuery(client => client
+          .from('parcelas')
+          .select('id,valor,valor_pago,vencimento,status,vendas!inner(cliente_id,status)')
+          .eq('vendas.cliente_id', clienteId)
+          .neq('vendas.status', 'cancelada')
+        ) || [];
+
+        const todayCredit = todayISO();
+        const overdue = openInstallments.some(p =>
+          p.status !== 'paga' &&
+          Number(p.valor || 0) - Number(p.valor_pago || 0) > 0.005 &&
+          p.vencimento < todayCredit
+        );
+
+        if (overdue) {
+          throw new Error('Crediário bloqueado: este cliente possui parcela vencida em aberto.');
+        }
+
+        const openBalance = openInstallments.reduce((sum,p) => {
+          const paid = p.status === 'paga' && p.valor_pago == null ? Number(p.valor || 0) : Number(p.valor_pago || 0);
+          return sum + Math.max(Number(p.valor || 0) - paid, 0);
+        }, 0);
+
+        const available = Number(profile.limite_aprovado || 0) - openBalance;
+        if (saleTotal > available + 0.005) {
+          throw new Error(`Venda acima do limite disponível. Disponível: ${fmtMoney(Math.max(available,0))}.`);
+        }
+      }
+
       const sale = await supabaseQuery(client => client
         .from('vendas')
         .insert({
