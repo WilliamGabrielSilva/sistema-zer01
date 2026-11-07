@@ -9,6 +9,7 @@ let sales = [];
 function paymentMethodLabel(method) {
     const labels = {
         crediario: 'Crediário / fiado',
+        cartao_loja: 'Cartão da loja',
         dinheiro: 'Dinheiro',
         pix: 'PIX',
         cartao_debito: 'Cartão de débito',

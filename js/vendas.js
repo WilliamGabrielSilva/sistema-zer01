@@ -482,7 +482,7 @@ document
 
 function syncSaleMode() {
   const mode = document.getElementById('sale-type')?.value || 'avista';
-  const isCredit = mode === 'crediario';
+  const isCredit = mode === 'crediario' || mode === 'cartao_loja';
   const clientSelect = document.getElementById('sale-client');
   const clientMark = document.getElementById('client-required-mark');
   const clientHelp = document.getElementById('client-help');
@@ -503,6 +503,7 @@ function syncSaleMode() {
   if (installmentSettings) installmentSettings.hidden = !isCredit;
   if (paidNote) paidNote.hidden = isCredit;
   if (title) title.textContent = isCredit ? 'Parcelamento' : 'Pagamento';
+  if (title && mode === 'cartao_loja') title.textContent = 'Parcelamento — cartão da loja';
   if (submit) submit.textContent = isCredit ? 'Salvar venda e parcelas' : 'Finalizar venda';
 
   renderInstallments();
@@ -525,14 +526,25 @@ document
 
     try {
       const mode = document.getElementById('sale-type')?.value || 'avista';
-      const isCredit = mode === 'crediario';
+      const isCredit = mode === 'crediario' || mode === 'cartao_loja';
       const clienteId = document.getElementById('sale-client')?.value || null;
       const paymentMethod = document.getElementById('payment-method')?.value || null;
       const saleTotal = total();
 
       if (isCredit && !clienteId) {
-        toast('Selecione um cliente para vendas no crediário.', 'error');
+        toast(mode === 'cartao_loja'
+          ? 'Identifique o cartão da loja do cliente.'
+          : 'Selecione um cliente para vendas no crediário.', 'error');
         return;
+      }
+
+      // Cartão da loja: o cartão precisa estar identificado e continuar ativo no momento da venda.
+      if (mode === 'cartao_loja') {
+        if (!window.ZER01CartaoLoja?.getCard()) {
+          toast('Leia ou digite o código do cartão da loja antes de finalizar.', 'error');
+          return;
+        }
+        await window.ZER01CartaoLoja.revalidate(clienteId);
       }
 
       if (!isCredit && !paymentMethod) {
@@ -640,7 +652,7 @@ document
           quantidade_parcelas: installmentCount,
           data_venda: today,
           status: isCredit ? 'aberta' : 'finalizada',
-          forma_pagamento: isCredit ? 'crediario' : paymentMethod,
+          forma_pagamento: isCredit ? mode : paymentMethod,
           observacoes,
           itens_json: items.map(item => ({
             descricao: String(item.descricao || '').trim() || 'Item sem descrição',
@@ -708,9 +720,10 @@ document
         itens_json: items.map(item => ({ descricao: String(item.descricao || '').trim() || 'Item sem descrição', quantidade: Number(item.quantidade) || 1, valor: Number(item.valor) || 0 })).filter(item => item.descricao !== 'Item sem descrição' || item.valor > 0),
         parcelas: receiptInstallments
       };
-      toast(isCredit ? 'Venda e parcelas salvas no Supabase.' : 'Venda à vista registrada e marcada como paga.');
+      toast(isCredit ? (mode === 'cartao_loja' ? 'Venda no cartão da loja e parcelas salvas.' : 'Venda e parcelas salvas no Supabase.') : 'Venda à vista registrada e marcada como paga.');
       event.target.reset();
       document.getElementById('sale-type').value = 'avista';
+      window.ZER01CartaoLoja?.clear();
       document.getElementById('installment-count').value = '1';
       items = [{ descricao: '', quantidade: 1, valor: 0 }];
       renderItems();

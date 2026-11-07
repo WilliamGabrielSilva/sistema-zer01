@@ -1,0 +1,60 @@
+/* Cartão da loja — campo de leitura, tela de informações e leitor de câmera. */
+
+#card-field[hidden],
+#card-chip[hidden],
+#card-required-mark[hidden] { display: none !important; }
+
+#card-help { display: block; margin-top: 2px; color: var(--muted, #8d949e); font-size: 12px; line-height: 1.4; }
+
+.card-input-row { display: flex; gap: 8px; flex-wrap: wrap; }
+.card-input-row input { flex: 1 1 220px; min-width: 0; letter-spacing: .5px; font-family: 'Space Grotesk', monospace; }
+.card-input-row .btn { white-space: nowrap; }
+
+#card-chip {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap;
+  margin-top: 4px; padding: 12px 14px; border: 1px solid #2f6b52; border-radius: 8px;
+  background: rgba(78, 209, 155, .08);
+}
+.card-chip-info { display: grid; gap: 3px; min-width: 0; }
+.card-chip-info strong { font-size: 14px; }
+.card-chip-info span { color: var(--muted, #8d949e); font-size: 12px; overflow-wrap: anywhere; }
+.card-chip-actions { display: flex; gap: 6px; }
+.card-chip-actions .btn { padding: 7px 10px; font-size: 12px; }
+
+/* Tela de informações do cartão */
+.card-modal-card { width: min(560px, 100%); }
+.card-modal-status { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 16px; font-size: 12px; }
+.card-status { display: inline-flex; align-items: center; padding: 5px 10px; border-radius: 999px; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .6px; }
+.card-status.ok { color: var(--green, #4ed19b); background: rgba(78, 209, 155, .12); }
+.card-status.bad { color: var(--red, #ee7474); background: rgba(238, 116, 116, .12); }
+
+.card-modal-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin-bottom: 18px; }
+.card-modal-grid.three { grid-template-columns: repeat(3, minmax(0, 1fr)); margin: 14px 0 0; }
+.card-modal-grid > div { display: grid; gap: 4px; padding: 12px; border: 1px solid var(--line, #343a42); border-radius: 8px; background: rgba(255, 255, 255, .02); min-width: 0; }
+.card-modal-grid small, .card-limit small { color: var(--muted, #8d949e); font-size: 10px; letter-spacing: 1px; text-transform: uppercase; }
+.card-modal-grid strong { font-size: 14px; overflow-wrap: anywhere; }
+.bad-text { color: var(--red, #ee7474); }
+
+.card-limit { padding: 16px; border: 1px solid var(--line, #343a42); border-radius: 10px; background: rgba(255, 255, 255, .025); margin-bottom: 14px; }
+.card-limit-available { display: grid; gap: 6px; }
+.card-limit-available strong { font: 700 30px 'Space Grotesk', sans-serif; }
+.card-limit-bar { height: 8px; margin-top: 12px; border-radius: 99px; background: #121416; overflow: hidden; }
+.card-limit-bar span { display: block; height: 100%; background: var(--amber, #d60c0c); border-radius: 99px; }
+
+.card-sale-check { margin-bottom: 12px; padding: 11px 13px; border-radius: 8px; font-size: 13px; line-height: 1.4; }
+.card-sale-check.ok { color: var(--green, #4ed19b); background: rgba(78, 209, 155, .1); }
+.card-sale-check.bad { color: var(--red, #ee7474); background: rgba(238, 116, 116, .1); }
+.card-alert { margin-bottom: 12px; padding: 12px 14px; border: 1px solid #6a3438; border-radius: 8px; background: rgba(238, 116, 116, .1); color: var(--red, #ee7474); font-size: 13px; line-height: 1.4; }
+
+.card-modal-actions { display: flex; justify-content: flex-end; gap: 10px; flex-wrap: wrap; margin-top: 8px; }
+.card-modal-actions .btn[disabled] { opacity: .45; cursor: not-allowed; transform: none; }
+
+/* Leitor por câmera */
+.card-scan-card { width: min(520px, 100%); }
+.card-scan-view { position: relative; overflow: hidden; border-radius: 10px; background: #000; aspect-ratio: 4 / 3; }
+.card-scan-view video { width: 100%; height: 100%; object-fit: cover; }
+.card-scan-line { position: absolute; left: 8%; right: 8%; top: 50%; height: 2px; background: var(--amber, #d60c0c); box-shadow: 0 0 12px var(--amber, #d60c0c); }
+
+@media (max-width: 720px) {
+  .card-modal-grid.three { grid-template-columns: 1fr; }
+}

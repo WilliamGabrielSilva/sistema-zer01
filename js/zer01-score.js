@@ -52,7 +52,7 @@ function calculateCustomerScore(cliente, parcelas) {
   const today = scoreToday();
   const customerInstallments = parcelas.filter(p =>
     p.vendas?.cliente_id === cliente.id &&
-    p.vendas?.forma_pagamento === 'crediario' &&
+    ['crediario','cartao_loja'].includes(p.vendas?.forma_pagamento) &&
     p.vendas?.status !== 'cancelada'
   );
 
@@ -149,7 +149,7 @@ async function loadZer01Score() {
       supabaseQuery(c => c.from('clientes').select('*').order('nome')),
       supabaseQuery(c => c.from('score_configuracoes').select('*').eq('id',1).maybeSingle()),
       supabaseQuery(c => c.from('cliente_score').select('*')),
-      supabaseQuery(c => c.from('vendas').select('id,cliente_id,status,forma_pagamento').eq('forma_pagamento','crediario'))
+      supabaseQuery(c => c.from('vendas').select('id,cliente_id,status,forma_pagamento').in('forma_pagamento',['crediario','cartao_loja']))
     ]);
 
     if (config) scoreConfig = config;

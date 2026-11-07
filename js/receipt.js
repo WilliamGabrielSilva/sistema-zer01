@@ -4,7 +4,7 @@
    ========================================================= */
 (function () {
   const methodLabels = {
-    crediario: 'Crediário / fiado', dinheiro: 'Dinheiro', pix: 'PIX',
+    crediario: 'Crediário / fiado', cartao_loja: 'Cartão da loja', dinheiro: 'Dinheiro', pix: 'PIX',
     cartao_debito: 'Cartão de débito', cartao_credito: 'Cartão de crédito à vista',
     transferencia: 'Transferência bancária', cartao: 'Cartão', outros: 'Outros'
   };
@@ -32,7 +32,7 @@
   }
 
   function receiptHTML(sale) {
-    const isCredit = sale.forma_pagamento === 'crediario';
+    const isCredit = ['crediario', 'cartao_loja'].includes(sale.forma_pagamento);
     const installments = Array.isArray(sale.parcelas) ? [...sale.parcelas].sort((a, b) => Number(a.numero) - Number(b.numero)) : [];
     const installmentsHTML = isCredit ? `
       <div class="rule"></div><div class="section-title">PARCELAMENTO</div>
@@ -83,7 +83,7 @@
         html, body { margin: 0 !important; padding: 0 !important; width: var(--largura) !important; min-width: 0 !important; }
         body { padding: 0 var(--margem) !important; }
       }
-    </style></head><body><h1>ZER01</h1><div class="subtitle">MODA MASCULINA<br>COMPROVANTE DE VENDA</div><div class="rule"></div><div class="meta"><span>Venda</span><strong>#${escape(String(sale.id || '').slice(0, 8).toUpperCase() || '—')}</strong></div><div class="meta"><span>Data</span><span>${escape(dateText)}</span></div><div class="meta"><span>Cliente</span><span>${escape(sale.clientes?.nome || sale.cliente_nome || 'Não identificado')}</span></div><div class="rule"></div><div class="section-title">ITENS</div>${itemRows(sale)}<div class="rule"></div><div class="total-row"><span>TOTAL</span><strong>${money(sale.valor_total)}</strong></div><div class="meta" style="margin-top:7px"><span>Pagamento</span><strong>${escape(methodLabels[sale.forma_pagamento] || sale.forma_pagamento || '—')}</strong></div><div class="status">${isCredit ? 'VENDA NO CREDIÁRIO' : 'PAGO'}</div>${installmentsHTML}<div class="rule"></div><div class="footer"><div class="store-address">Avenida Inglaterra, 626<br>Londrina/PR</div><br>Este documento é um comprovante interno,<br>não é documento fiscal.<br><br>Obrigado pela preferência!<br>ZER01</div><script>
+    </style></head><body><h1>ZER01</h1><div class="subtitle">MODA MASCULINA<br>COMPROVANTE DE VENDA</div><div class="rule"></div><div class="meta"><span>Venda</span><strong>#${escape(String(sale.id || '').slice(0, 8).toUpperCase() || '—')}</strong></div><div class="meta"><span>Data</span><span>${escape(dateText)}</span></div><div class="meta"><span>Cliente</span><span>${escape(sale.clientes?.nome || sale.cliente_nome || 'Não identificado')}</span></div><div class="rule"></div><div class="section-title">ITENS</div>${itemRows(sale)}<div class="rule"></div><div class="total-row"><span>TOTAL</span><strong>${money(sale.valor_total)}</strong></div><div class="meta" style="margin-top:7px"><span>Pagamento</span><strong>${escape(methodLabels[sale.forma_pagamento] || sale.forma_pagamento || '—')}</strong></div><div class="status">${isCredit ? (sale.forma_pagamento === 'cartao_loja' ? 'VENDA NO CARTÃO DA LOJA' : 'VENDA NO CREDIÁRIO') : 'PAGO'}</div>${installmentsHTML}<div class="rule"></div><div class="footer"><div class="store-address">Avenida Inglaterra, 626<br>Londrina/PR</div><br>Este documento é um comprovante interno,<br>não é documento fiscal.<br><br>Obrigado pela preferência!<br>ZER01</div><script>
       window.addEventListener('load', () => {
         setTimeout(() => window.print(), 300);
       });
