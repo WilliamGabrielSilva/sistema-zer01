@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>SISTEMA ZER01 — Gastos</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/global.css"><link rel="stylesheet" href="css/gastos.css">
+</head>
+<body data-page="gastos">
+  <div id="app-shell"></div>
+  <main id="page-content" class="page-content"><aside class="sidebar" id="sidebar"><div class="brand"><img src="logo.png" alt="ZER01"><div><strong>ZER<span>01</span></strong><small>CONTROLE COMERCIAL</small></div></div><nav class="nav-primary"><a class="nav-link" href="dashboard.html"><span class="nav-icon">▦</span><span>Dashboard</span></a><a class="nav-link" href="clientes.html"><span class="nav-icon">♙</span><span>Clientes</span></a><a class="nav-link" href="vendas.html"><span class="nav-icon">＋</span><span>Nova venda</span></a><a class="nav-link" href="vendas-list.html"><span class="nav-icon">⌁</span><span>Vendas</span></a><a class="nav-link" href="receber.html"><span class="nav-icon">◷</span><span>Contas a receber</span></a><a class="nav-link" href="pagamentos.html"><span class="nav-icon">↗</span><span>Pagamentos</span></a><a class="nav-link" href="zer01-score.html"><span class="nav-icon">◉</span><span>Zer01 Score</span></a><a class="nav-link active" href="gastos.html"><span class="nav-icon">▥</span><span>Gastos</span></a><a class="nav-link" href="relatorios.html"><span class="nav-icon">▤</span><span>Relatórios</span></a><a class="nav-link" href="configuracoes.html"><span class="nav-icon">⚙</span><span>Configurações</span></a></nav><div class="sidebar-bottom"><a class="nav-link" href="configuracoes.html"><span class="nav-icon">?</span><span>Central de ajuda</span></a><button class="nav-link logout" id="logout-button"><span class="nav-icon">↪</span><span>Sair</span></button></div></aside><button class="mobile-menu" id="mobile-menu" aria-label="Abrir menu">☰</button><header class="topbar"><div><span class="eyebrow">SISTEMA ZER01 / OPERAÇÃO</span><h1>Gastos</h1></div><div class="topbar-actions"><span class="live-dot"></span><span id="current-user">Sessão ativa</span><a class="avatar" href="configuracoes.html">Z1</a></div></header><section class="page-header"><div><h2>Gastos e investimentos</h2><p>Despesas da loja, compras de peças para vender e o resultado do período.</p></div></section>
+
+<section class="panel gastos-filters">
+  <div class="form-grid gastos-period">
+    <div class="field"><label for="g-start">Data inicial</label><input id="g-start" type="date"></div>
+    <div class="field"><label for="g-end">Data final</label><input id="g-end" type="date"></div>
+  </div>
+  <div class="gastos-presets">
+    <button type="button" class="btn btn-ghost" data-preset="month">Este mês</button>
+    <button type="button" class="btn btn-ghost" data-preset="prev">Mês passado</button>
+    <button type="button" class="btn btn-ghost" data-preset="year">Este ano</button>
+  </div>
+</section>
+
+<div class="gastos-tabs" role="tablist">
+  <button type="button" class="gastos-tab active" role="tab" data-tab="resumo">Resumo e lucro</button>
+  <button type="button" class="gastos-tab" role="tab" data-tab="despesas">Despesas da loja</button>
+  <button type="button" class="gastos-tab" role="tab" data-tab="investimentos">Investimentos (peças)</button>
+</div>
+
+<section id="tab-resumo" class="gastos-pane">
+  <div class="toolbar">
+    <div class="field" style="min-width:260px"><label for="g-basis">Receita considerada</label>
+      <select id="g-basis">
+        <option value="venda">Por venda (o que foi vendido no período)</option>
+        <option value="caixa">Por recebimento (o que o cliente pagou no período)</option>
+      </select>
+    </div>
+  </div>
+  <div class="grid grid-4">
+    <article class="panel metric"><label id="g-rev-label">Receita</label><strong id="g-rev">R$ 0,00</strong></article>
+    <article class="panel metric"><label>Despesas da loja</label><strong id="g-exp">R$ 0,00</strong><small id="g-exp-sub"></small></article>
+    <article class="panel metric"><label>Compras de peças</label><strong id="g-buy">R$ 0,00</strong></article>
+    <article class="panel metric"><label>Resultado do período</label><strong id="g-result">R$ 0,00</strong></article>
+  </div>
+  <p class="gastos-note">Resultado = receita − despesas − compras de peças. Como a compra da mercadoria entra inteira no mês em que foi feita, um mês de compra grande pode ficar negativo mesmo com as peças ainda por vender. O lucro de cada lote aparece abaixo.</p>
+
+  <div class="grid grid-3" style="margin-top:16px">
+    <article class="panel metric"><label>Lucro projetado dos lotes</label><strong id="g-proj">R$ 0,00</strong><small id="g-proj-sub"></small></article>
+    <article class="panel metric"><label>Margem projetada</label><strong id="g-margin">—</strong><small>lucro ÷ venda prevista</small></article>
+    <article class="panel metric"><label>Despesas a pagar</label><strong id="g-pending">R$ 0,00</strong><small id="g-pending-sub"></small></article>
+  </div>
+
+  <section class="panel" style="margin-top:16px"><div class="panel-title"><h3>Despesas por categoria</h3></div><div id="g-cats"></div></section>
+  <section class="panel" style="margin-top:16px"><div class="panel-title"><h3>Lucro por compra (lote)</h3></div><div class="table-wrap"><table class="data-table"><thead><tr><th>Data</th><th>Fornecedor</th><th>Peças</th><th>Custo</th><th>Venda prevista</th><th>Lucro previsto</th><th>Margem</th></tr></thead><tbody id="g-lots-table"></tbody></table></div></section>
+  <section class="panel" style="margin-top:16px"><div class="panel-title"><h3>Itens com maior lucro previsto</h3></div><div class="table-wrap"><table class="data-table"><thead><tr><th>Item</th><th>Qtd</th><th>Custo</th><th>Venda prevista</th><th>Lucro previsto</th><th>Margem</th></tr></thead><tbody id="g-items-table"></tbody></table></div></section>
+</section>
+
+<section id="tab-despesas" class="gastos-pane" hidden>
+  <div class="toolbar">
+    <select id="d-category" class="search" style="max-width:240px"><option value="">Todas as categorias</option></select>
+    <select id="d-status" class="search" style="max-width:200px"><option value="">Todas</option><option value="pago">Pagas</option><option value="a_pagar">A pagar</option></select>
+    <span class="toolbar-spacer"></span>
+    <button type="button" class="btn btn-ghost" id="d-recurring">Lançar recorrentes do mês</button>
+    <button type="button" class="btn btn-primary" id="d-new">＋ Nova despesa</button>
+  </div>
+  <section class="panel"><div class="table-wrap"><table class="data-table"><thead><tr><th>Data</th><th>Descrição</th><th>Categoria</th><th>Valor</th><th>Situação</th><th>Ações</th></tr></thead><tbody id="d-table"></tbody></table></div><div class="gastos-total" id="d-total"></div></section>
+</section>
+
+<section id="tab-investimentos" class="gastos-pane" hidden>
+  <div class="toolbar">
+    <span class="toolbar-spacer"></span>
+    <button type="button" class="btn btn-primary" id="l-new">＋ Nova compra de peças</button>
+  </div>
+  <div id="l-list"></div>
+</section>
+
+<div id="g-modal"></div>
+</main>
+  <div id="toast-region" class="toast-region" aria-live="polite"></div>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="js/supabase.js"></script><script src="js/auth.js"></script><script src="js/app.js"></script>
+  <script src="js/gastos.js"></script>
+</body></html>

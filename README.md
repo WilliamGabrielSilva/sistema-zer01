@@ -59,3 +59,12 @@ Antes de usar a versão atualizada, execute no SQL Editor do Supabase o arquivo 
 - O aumento precisa cobrir pelo menos o que falta para a venda. Se a venda falhar depois do aumento ser aplicado, ele é desfeito automaticamente.
 - Cliente com parcela vencida, sem limite aprovado ou com crédito negado **não** pode ter o limite aumentado.
 - Um cartão com limite totalmente usado agora pode ser lido; o aumento é oferecido ao finalizar a venda.
+
+## Gastos e investimentos (fase 1)
+
+- **Instalação:** execute `supabase/migration_gastos.sql` no SQL Editor do Supabase. Ela cria `despesas`, `compras_lotes` e `compras_itens` e a função `zer01_salvar_lote`.
+- A aba **Gastos** é exclusiva do administrador, no menu, na página e no banco (RLS por e-mail). Para incluir outro administrador, edite a lista de e-mails em `zer01_is_admin()` na migração e rode de novo.
+- **Despesas da loja:** categoria, valor, data, "já paga" ou "a pagar" (com vencimento), forma de pagamento e observação. O botão **Lançar recorrentes do mês** copia, como "a pagar", as despesas marcadas como recorrentes no mês passado que ainda não foram lançadas neste mês.
+- **Investimentos (peças):** cada compra é um lote com fornecedor, data e itens (descrição, quantidade, custo e venda unitários). O sistema calcula custo total, venda prevista, lucro previsto e margem.
+- **Resumo e lucro:** escolha o período e a receita considerada (por venda ou por recebimento). Resultado = receita − despesas − compras de peças. Também mostra lucro projetado por lote, itens com maior lucro previsto, despesas por categoria e despesas a pagar.
+- Nesta fase as compras não são ligadas às vendas: o lucro dos lotes é **projetado** (se tudo for vendido pelo preço planejado), não o lucro real de cada venda.

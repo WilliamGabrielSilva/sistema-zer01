@@ -1,0 +1,78 @@
+/* Gastos e investimentos — filtros, abas, listas, formulários e barras. */
+
+.gastos-filters { display: flex; align-items: end; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
+.gastos-period { grid-template-columns: repeat(2, minmax(150px, 220px)); }
+.gastos-presets { display: flex; gap: 8px; flex-wrap: wrap; }
+
+.gastos-tabs { display: flex; gap: 6px; flex-wrap: wrap; margin: 18px 0 16px; border-bottom: 1px solid var(--line, #343a42); }
+.gastos-tab { border: 0; border-bottom: 2px solid transparent; background: transparent; color: var(--muted, #8d949e); padding: 11px 16px; font-weight: 600; font-size: 14px; margin-bottom: -1px; }
+.gastos-tab:hover { color: var(--text, #f2f0ea); }
+.gastos-tab.active { color: var(--text, #f2f0ea); border-bottom-color: var(--amber, #d60c0c); }
+.gastos-pane[hidden] { display: none !important; }
+
+.toolbar-spacer { flex: 1; }
+.toolbar .field label { font-size: 11px; }
+
+.gastos-note { margin: 12px 2px 0; color: var(--muted, #8d949e); font-size: 12.5px; line-height: 1.5; }
+.gastos-total { margin-top: 14px; text-align: right; color: var(--muted, #8d949e); font-size: 13px; }
+.gastos-total strong { color: var(--text, #f2f0ea); font-size: 15px; margin-left: 6px; }
+
+.metric strong.pos { color: var(--green, #4ed19b); }
+.metric strong.neg { color: var(--red, #ee7474); }
+.text-pos { color: var(--green, #4ed19b); }
+.text-neg { color: var(--red, #ee7474); }
+
+/* Despesas por categoria */
+.gastos-bar-row { display: grid; grid-template-columns: 170px 1fr 150px; gap: 12px; align-items: center; padding: 7px 0; font-size: 13px; }
+.gastos-bar-track { height: 8px; border-radius: 99px; background: #121416; overflow: hidden; }
+.gastos-bar-track span { display: block; height: 100%; border-radius: 99px; background: var(--amber, #d60c0c); }
+.gastos-bar-row b { text-align: right; font-weight: 600; }
+
+/* Tabelas */
+.gastos-actions { display: flex; gap: 6px; }
+.gastos-actions .btn { padding: 6px 10px; font-size: 12px; }
+.status-apagar { color: var(--amber, #d60c0c); background: rgba(242, 169, 59, .1); }
+.td-desc { white-space: normal !important; min-width: 180px; }
+.td-desc small { display: block; color: var(--muted, #8d949e); margin-top: 2px; }
+
+/* Compras (lotes) */
+.lot-card { margin-bottom: 16px; }
+.lot-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 14px; flex-wrap: wrap; margin-bottom: 14px; }
+.lot-head h3 { font: 600 16px 'Space Grotesk', sans-serif; margin: 0; }
+.lot-head small { display: block; margin-top: 4px; color: var(--muted, #8d949e); font-size: 12px; }
+.lot-kpis { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; margin-bottom: 14px; }
+.lot-kpis > div { display: grid; gap: 3px; padding: 10px 12px; border: 1px solid var(--line, #343a42); border-radius: 8px; background: rgba(255, 255, 255, .02); }
+.lot-kpis small { color: var(--muted, #8d949e); font-size: 10px; letter-spacing: 1px; text-transform: uppercase; }
+.lot-kpis strong { font-size: 15px; }
+
+/* Formulários em modal */
+.g-modal-card { width: min(640px, 100%); }
+.g-modal-card.wide { width: min(860px, 100%); }
+.g-check { display: flex; align-items: center; gap: 9px; font-size: 13px; color: var(--text, #f2f0ea); cursor: pointer; }
+.g-check input { accent-color: var(--amber, #d60c0c); width: 16px; height: 16px; }
+.g-error { margin-top: 12px; padding: 10px 12px; border: 1px solid #6a3438; border-radius: 8px; background: rgba(238, 116, 116, .1); color: var(--red, #ee7474); font-size: 13px; }
+.g-error[hidden], [hidden].field { display: none !important; }
+.g-actions { display: flex; justify-content: flex-end; gap: 10px; flex-wrap: wrap; margin-top: 18px; }
+
+.g-items-head, .g-item-row { display: grid; grid-template-columns: minmax(150px, 2.2fr) 80px 110px 110px 100px 36px; gap: 8px; align-items: center; }
+.g-items-head { margin: 18px 0 6px; color: var(--muted, #8d949e); font-size: 10px; letter-spacing: 1px; text-transform: uppercase; }
+.g-item-row { margin-bottom: 8px; }
+.g-item-row input { width: 100%; border: 1px solid var(--line, #343a42); border-radius: 6px; background: #121416; color: var(--text, #f2f0ea); padding: 10px; outline: none; min-width: 0; }
+.g-item-row input:focus { border-color: var(--amber, #d60c0c); }
+.g-item-profit { font-size: 13px; font-weight: 600; text-align: right; }
+.g-item-row .icon-btn { width: 34px; height: 34px; }
+
+.g-lot-totals { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; margin-top: 14px; }
+.g-lot-totals > div { display: grid; gap: 3px; padding: 10px 12px; border: 1px solid var(--line, #343a42); border-radius: 8px; background: rgba(255, 255, 255, .025); }
+.g-lot-totals small { color: var(--muted, #8d949e); font-size: 10px; letter-spacing: 1px; text-transform: uppercase; }
+.g-lot-totals strong { font-size: 15px; }
+
+@media (max-width: 720px) {
+  .gastos-period { grid-template-columns: 1fr 1fr; }
+  .gastos-bar-row { grid-template-columns: 100px 1fr 120px; }
+  .lot-kpis, .g-lot-totals { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .g-items-head { display: none; }
+  .g-item-row { grid-template-columns: 1fr 1fr; padding: 10px; border: 1px solid var(--line, #343a42); border-radius: 8px; }
+  .g-item-row .g-item-desc { grid-column: 1 / -1; }
+  .g-item-profit { text-align: left; }
+}

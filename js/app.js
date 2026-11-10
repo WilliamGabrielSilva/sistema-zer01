@@ -293,6 +293,7 @@ function aplicarPermissoesMenu() {
     const somenteAdmin = [
         'pagamentos.html',
         'relatorios.html',
+        'gastos.html',
         'configuracoes.html'
     ];
 
@@ -375,6 +376,8 @@ function protegerPaginaPorPerfil() {
         'pagamentos.html',
 
         'relatorios.html',
+
+        'gastos.html',
 
         'configuracoes.html'
 
