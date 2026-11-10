@@ -524,6 +524,9 @@ document
     const submitButton = event.target.querySelector('button[type="submit"]');
     if (submitButton) submitButton.disabled = true;
 
+    // Aumento de limite aplicado nesta tentativa de venda (desfeito se a venda falhar).
+    let pendingLimitGrantId = null;
+
     try {
       const mode = document.getElementById('sale-type')?.value || 'avista';
       const isCredit = mode === 'crediario' || mode === 'cartao_loja';
@@ -603,43 +606,34 @@ document
       const today = todayISO();
 
       if (isCredit) {
-        const profile = await supabaseQuery(client => client
-          .from('cliente_score')
-          .select('limite_aprovado')
-          .eq('cliente_id', clienteId)
-          .maybeSingle()
-        );
+        const limitInfo = await window.ZER01AumentoLimite.fetchLimitInfo(clienteId);
 
-        if (!profile || profile.limite_aprovado === null) {
+        if (limitInfo.base === null) {
           throw new Error('Este cliente ainda não possui limite aprovado. Acesse o Zer01 Score para realizar a análise.');
         }
 
-        const openInstallments = await supabaseQuery(client => client
-          .from('parcelas')
-          .select('id,valor,valor_pago,vencimento,status,vendas!inner(cliente_id,status)')
-          .eq('vendas.cliente_id', clienteId)
-          .neq('vendas.status', 'cancelada')
-        ) || [];
-
-        const todayCredit = todayISO();
-        const overdue = openInstallments.some(p =>
-          p.status !== 'paga' &&
-          Number(p.valor || 0) - Number(p.valor_pago || 0) > 0.005 &&
-          p.vencimento < todayCredit
-        );
-
-        if (overdue) {
+        if (limitInfo.overdueCount > 0) {
           throw new Error('Crediário bloqueado: este cliente possui parcela vencida em aberto.');
         }
 
-        const openBalance = openInstallments.reduce((sum,p) => {
-          const paid = p.status === 'paga' && p.valor_pago == null ? Number(p.valor || 0) : Number(p.valor_pago || 0);
-          return sum + Math.max(Number(p.valor || 0) - paid, 0);
-        }, 0);
+        // Limite insuficiente: permite aumentar no ato da venda (permanente ou temporário).
+        if (saleTotal > limitInfo.available + 0.005) {
+          const decision = await window.ZER01AumentoLimite.requestIncrease({
+            clienteNome: clients.find(client => String(client.id) === String(clienteId))?.nome || null,
+            saleTotal,
+            info: limitInfo
+          });
 
-        const available = Number(profile.limite_aprovado || 0) - openBalance;
-        if (saleTotal > available + 0.005) {
-          throw new Error(`Venda acima do limite disponível. Disponível: ${fmtMoney(Math.max(available,0))}.`);
+          if (!decision) {
+            toast('Venda não finalizada: o cliente não tem limite disponível suficiente.', 'error');
+            return;
+          }
+
+          const granted = await window.ZER01AumentoLimite.grant(clienteId, decision);
+          pendingLimitGrantId = granted.id;
+          toast(decision.tipo === 'permanente'
+            ? `Limite aumentado em caráter permanente. Novo limite: ${fmtMoney(granted.limite_base)}.`
+            : `Aumento temporário aplicado. Limite nesta venda: ${fmtMoney(granted.limite_efetivo)}.`);
         }
       }
 
@@ -665,6 +659,12 @@ document
       );
 
       if (!sale?.id) throw new Error('A venda não foi criada corretamente.');
+
+      // A venda existe: o aumento fica vinculado a ela (não é mais desfeito automaticamente).
+      if (pendingLimitGrantId) {
+        await window.ZER01AumentoLimite.linkToSale(pendingLimitGrantId, sale.id);
+        pendingLimitGrantId = null;
+      }
 
       let receiptInstallments = [];
       if (isCredit) {
@@ -732,6 +732,10 @@ document
       if (typeof offerSaleReceipt === 'function') offerSaleReceipt(receiptSale);
     } catch (error) {
       console.error('Erro ao salvar venda:', error);
+      if (pendingLimitGrantId) {
+        await window.ZER01AumentoLimite.rollback(pendingLimitGrantId);
+        pendingLimitGrantId = null;
+      }
       toast(error?.message || 'Erro ao salvar a venda.', 'error');
     } finally {
       if (submitButton) submitButton.disabled = false;

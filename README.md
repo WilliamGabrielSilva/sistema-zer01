@@ -48,3 +48,14 @@ Antes de usar a versão atualizada, execute no SQL Editor do Supabase o arquivo 
 - Para identificar o cartão: digite o código, passe o **leitor de código de barras** (USB/Bluetooth, que digita o código e envia Enter) ou use o botão **Câmera** (exige HTTPS ou `localhost`).
 - Ao ler o cartão abre a tela com dados do cliente, status do cartão, limite aprovado, em aberto, disponível e parcelas vencidas. Cartão bloqueado/cancelado, cliente sem limite, com parcela vencida ou sem limite disponível não pode ser usado.
 - A venda no cartão da loja é revalidada ao finalizar e novamente no banco (trigger).
+
+
+## Aumento de limite no ato da venda (permanente ou temporário)
+
+- **Instalação:** execute `supabase/migration_aumento_limite.sql` no SQL Editor do Supabase (depois de `migration_cartao_loja.sql`). Ela cria a tabela `aumentos_limite`, as funções de concessão/desfazer e atualiza a trava do banco para usar o **limite efetivo** (limite aprovado + aumentos temporários ativos).
+- Em **Nova venda** (Cartão da loja e Crediário), se a venda for maior que o limite disponível, em vez de bloquear abre a tela **Limite insuficiente** mostrando quanto falta. O operador escolhe:
+  - **Aumento temporário:** vale por cima do limite do cliente. Cada real pago em qualquer parcela dele abate 1 real do aumento; quando o valor do aumento é pago (ou a dívida volta a caber no limite original) o limite volta ao original. Cancelar/excluir a venda encerra o aumento dela.
+  - **Aumento permanente:** soma o valor ao `limite_aprovado` do cliente, exige motivo e fica registrado em `analises_credito` (histórico do Zer01 Score) e em `aumentos_limite`.
+- O aumento precisa cobrir pelo menos o que falta para a venda. Se a venda falhar depois do aumento ser aplicado, ele é desfeito automaticamente.
+- Cliente com parcela vencida, sem limite aprovado ou com crédito negado **não** pode ter o limite aumentado.
+- Um cartão com limite totalmente usado agora pode ser lido; o aumento é oferecido ao finalizar a venda.

@@ -6,7 +6,7 @@
      limite (aprovado / em aberto / disponível).
    - Usado nas modalidades "Crediário / fiado" (opcional) e
      "Cartão da loja" (obrigatório) da tela Nova venda.
-   Depende de: app.js, vendas.js (carregado depois deles).
+   Depende de: app.js, aumento-limite.js, vendas.js (carregado depois deles).
    ========================================================= */
 (function () {
   const $ = id => document.getElementById(id);
@@ -44,43 +44,25 @@
       .maybeSingle());
   }
 
-  /** Mesma regra de limite usada pela venda e pela trava do banco. */
+  /** Mesma regra de limite usada pela venda e pela trava do banco (limite aprovado + aumento temporário). */
   async function fetchCreditProfile(clienteId) {
-    const [score, installments] = await Promise.all([
+    const [score, info] = await Promise.all([
       supabaseQuery(c => c.from('cliente_score')
         .select('pontuacao,classificacao,limite_aprovado')
         .eq('cliente_id', clienteId)
         .maybeSingle()),
-      supabaseQuery(c => c.from('parcelas')
-        .select('valor,valor_pago,vencimento,status,vendas!inner(cliente_id,status)')
-        .eq('vendas.cliente_id', clienteId)
-        .neq('vendas.status', 'cancelada'))
+      window.ZER01AumentoLimite.fetchLimitInfo(clienteId)
     ]);
 
-    const today = todayISO();
-    let openBalance = 0;
-    let overdueCount = 0;
-    let overdueAmount = 0;
-
-    (installments || []).forEach(p => {
-      const value = Number(p.valor || 0);
-      const paid = p.status === 'paga' && p.valor_pago == null ? value : Number(p.valor_pago || 0);
-      const remaining = p.status === 'paga' ? 0 : Math.max(value - paid, 0);
-      openBalance += remaining;
-      if (remaining > 0.005 && p.vencimento < today) {
-        overdueCount += 1;
-        overdueAmount += remaining;
-      }
-    });
-
-    const approved = score?.limite_aprovado == null ? null : Number(score.limite_aprovado);
     return {
       score,
-      approved,
-      openBalance,
-      available: approved == null ? 0 : Math.max(approved - openBalance, 0),
-      overdueCount,
-      overdueAmount
+      approved: info.effective,
+      base: info.base,
+      temp: info.temp,
+      openBalance: info.openBalance,
+      available: info.available,
+      overdueCount: info.overdueCount,
+      overdueAmount: info.overdueAmount
     };
   }
 
@@ -95,8 +77,13 @@
     if (profile.overdueCount > 0) {
       return `Cliente com ${profile.overdueCount} parcela(s) vencida(s) em aberto (${fmtMoney(profile.overdueAmount)}).`;
     }
-    if (profile.available <= 0.005) {
-      return 'Limite totalmente utilizado.';
+    return null;
+  }
+
+  /** Aviso (não bloqueia): o limite pode ser aumentado ao finalizar a venda. */
+  function limitWarning(profile) {
+    if (profile.approved != null && profile.available <= 0.005) {
+      return 'Limite totalmente utilizado. Ao finalizar a venda será possível aumentar o limite.';
     }
     return null;
   }
@@ -247,11 +234,12 @@
     let saleLine = '';
     if (saleTotal > 0 && profile.approved != null) {
       const fits = saleTotal <= profile.available + 0.005;
-      saleLine = `<div class="card-sale-check ${fits ? 'ok' : 'bad'}">
+      saleLine = `<div class="card-sale-check ${fits ? 'ok' : 'warn'}">
         Valor da venda atual: <strong>${esc(fmtMoney(saleTotal))}</strong> —
-        ${fits ? 'dentro do limite disponível.' : `acima do limite disponível (faltam ${esc(fmtMoney(saleTotal - profile.available))}).`}
+        ${fits ? 'dentro do limite disponível.' : `acima do limite disponível (faltam ${esc(fmtMoney(saleTotal - profile.available))}). Será possível aumentar o limite ao finalizar a venda.`}
       </div>`;
     }
+    const warning = reason ? null : limitWarning(profile);
 
     const modal = document.createElement('div');
     modal.id = 'card-modal';
@@ -285,7 +273,7 @@
           </div>
           <div class="card-limit-bar"><span style="width:${used.toFixed(1)}%"></span></div>
           <div class="card-modal-grid three">
-            <div><small>Limite aprovado</small><strong>${profile.approved == null ? '—' : esc(fmtMoney(profile.approved))}</strong></div>
+            <div><small>Limite aprovado</small><strong>${profile.approved == null ? '—' : esc(fmtMoney(profile.approved))}</strong>${profile.temp > 0.005 ? `<small class="sub">base ${esc(fmtMoney(profile.base))} + temporário ${esc(fmtMoney(profile.temp))}</small>` : ''}</div>
             <div><small>Em aberto</small><strong>${esc(fmtMoney(profile.openBalance))}</strong></div>
             <div><small>Parcelas vencidas</small><strong class="${profile.overdueCount ? 'bad-text' : ''}">${profile.overdueCount}${profile.overdueCount ? ' · ' + esc(fmtMoney(profile.overdueAmount)) : ''}</strong></div>
           </div>
@@ -293,6 +281,7 @@
 
         ${saleLine}
         ${reason ? `<div class="card-alert">⚠ ${esc(reason)}</div>` : ''}
+        ${warning ? `<div class="card-sale-check warn">${esc(warning)}</div>` : ''}
 
         <div class="card-modal-actions">
           <button type="button" class="btn btn-ghost" id="card-modal-cancel">${canApply ? 'Cancelar' : 'Fechar'}</button>

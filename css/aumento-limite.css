@@ -1,0 +1,32 @@
+/* Aumento de limite no ato da venda — tela de decisão. */
+
+.limit-modal-card { width: min(560px, 100%); }
+
+.limit-summary { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin-bottom: 14px; }
+.limit-summary > div { display: grid; gap: 4px; padding: 12px; border: 1px solid var(--line, #343a42); border-radius: 8px; background: rgba(255, 255, 255, .02); min-width: 0; }
+.limit-summary small { color: var(--muted, #8d949e); font-size: 10px; letter-spacing: 1px; text-transform: uppercase; }
+.limit-summary strong { font-size: 15px; overflow-wrap: anywhere; }
+
+.limit-missing { margin-bottom: 16px; padding: 12px 14px; border: 1px solid #6a3438; border-radius: 8px; background: rgba(238, 116, 116, .1); color: var(--red, #ee7474); font-size: 13px; line-height: 1.4; }
+
+.limit-types { display: grid; gap: 10px; margin-bottom: 16px; }
+.limit-type { display: flex; align-items: flex-start; gap: 12px; padding: 13px 14px; border: 1px solid var(--line, #343a42); border-radius: 8px; cursor: pointer; transition: .16s; }
+.limit-type:hover { border-color: #65707b; }
+.limit-type:has(input:checked) { border-color: var(--amber, #f2a93b); background: rgba(242, 169, 59, .07); }
+.limit-type input { margin-top: 3px; accent-color: var(--amber, #f2a93b); }
+.limit-type span { display: grid; gap: 4px; min-width: 0; }
+.limit-type strong { font-size: 14px; }
+.limit-type small { color: var(--muted, #8d949e); font-size: 12px; line-height: 1.45; }
+
+.limit-preview { margin-top: 8px; color: var(--muted, #8d949e); font-size: 12.5px; line-height: 1.5; }
+.limit-preview strong { color: var(--text, #e8eaed); }
+
+.limit-error { margin-top: 12px; padding: 10px 12px; border: 1px solid #6a3438; border-radius: 8px; background: rgba(238, 116, 116, .1); color: var(--red, #ee7474); font-size: 13px; }
+.limit-error[hidden], #limit-reason-mark[hidden] { display: none !important; }
+
+.card-sale-check.warn { color: var(--amber, #f2a93b); background: rgba(242, 169, 59, .1); }
+.card-modal-grid small.sub { text-transform: none; letter-spacing: 0; font-size: 11px; }
+
+@media (max-width: 720px) {
+  .limit-summary { grid-template-columns: 1fr; }
+}
